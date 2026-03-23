@@ -1,0 +1,689 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Event Intelligence | TiDB / Db9.ai</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg: #0f172a;
+      --bg2: #1e293b;
+      --purple: #8b5cf6;
+      --pink: #ec4899;
+      --green: #10b981;
+      --amber: #f59e0b;
+      --red: #ef4444;
+      --blue: #3b82f6;
+      --glass: rgba(255,255,255,0.05);
+      --border: rgba(255,255,255,0.09);
+      --t1: #f8fafc;
+      --t2: #94a3b8;
+      --t3: #64748b;
+    }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Outfit', sans-serif;
+      background: var(--bg);
+      color: var(--t1);
+      min-height: 100vh;
+      background-image:
+        radial-gradient(ellipse at 10% 0%,   rgba(139,92,246,.14) 0%, transparent 45%),
+        radial-gradient(ellipse at 90% 100%,  rgba(236,72,153,.12) 0%, transparent 45%);
+    }
+
+    /* ── Nav bar ──────────────────────────────────────────────────────────── */
+    nav {
+      position: sticky; top: 0; z-index: 100;
+      background: rgba(15,23,42,.85);
+      backdrop-filter: blur(16px);
+      border-bottom: 1px solid var(--border);
+      padding: 0 2rem;
+      height: 64px;
+      display: flex; align-items: center; gap: 1.5rem;
+    }
+    .nav-brand {
+      display: flex; align-items: center; gap: 0.65rem;
+      flex-shrink: 0; text-decoration: none; color: inherit;
+    }
+    .nav-brand-icon {
+      width: 34px; height: 34px; border-radius: 9px;
+      background: linear-gradient(135deg, var(--purple), var(--pink));
+      display: flex; align-items: center; justify-content: center;
+      font-size: 1rem;
+    }
+    .nav-brand-text { font-size: 1rem; font-weight: 700; }
+    .nav-brand-sub  { font-size: 0.72rem; color: var(--t2); font-weight: 400; }
+
+    .nav-divider { width: 1px; height: 28px; background: var(--border); flex-shrink: 0; }
+
+    /* Event URL input row */
+    .nav-scrape {
+      flex: 1; display: flex; align-items: center; gap: 0.6rem;
+    }
+    .nav-scrape label {
+      font-size: 0.78rem; color: var(--t2); white-space: nowrap; flex-shrink: 0;
+    }
+    .nav-scrape input[type="url"] {
+      flex: 1; min-width: 0;
+      background: rgba(255,255,255,0.07);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      color: var(--t1);
+      font-family: 'Outfit', sans-serif;
+      font-size: 0.85rem;
+      padding: 0.45rem 0.85rem;
+      transition: border-color .2s;
+    }
+    .nav-scrape input[type="url"]::placeholder { color: var(--t3); }
+    .nav-scrape input[type="url"]:focus { outline: none; border-color: var(--purple); }
+
+    .btn {
+      border: none; border-radius: 8px; cursor: pointer;
+      font-family: 'Outfit', sans-serif; font-weight: 600;
+      transition: all .18s; white-space: nowrap; flex-shrink: 0;
+    }
+    .btn-scrape {
+      background: linear-gradient(135deg, var(--purple), var(--pink));
+      color: #fff; padding: 0.45rem 1.1rem; font-size: 0.85rem;
+    }
+    .btn-scrape:hover:not(:disabled) { opacity: .85; transform: translateY(-1px); }
+    .btn-scrape:disabled { opacity: .45; cursor: not-allowed; }
+    .btn-sm {
+      padding: 0.3rem 0.7rem; font-size: 0.78rem;
+      background: var(--glass); border: 1px solid var(--border); color: var(--t2);
+    }
+    .btn-sm:hover { border-color: var(--purple); color: var(--t1); }
+
+    /* Jobs pill */
+    .nav-jobs { flex-shrink: 0; position: relative; }
+    #jobs-badge {
+      display: none;
+      position: absolute; top: -4px; right: -4px;
+      width: 16px; height: 16px; border-radius: 50%;
+      background: var(--purple); color: #fff;
+      font-size: 0.6rem; font-weight: 700;
+      align-items: center; justify-content: center;
+    }
+
+    /* ── Job status toast ─────────────────────────────────────────────────── */
+    #toast-container {
+      position: fixed; bottom: 1.5rem; right: 1.5rem;
+      display: flex; flex-direction: column; gap: 0.6rem; z-index: 999;
+    }
+    .toast {
+      background: var(--bg2); border: 1px solid var(--border);
+      border-radius: 12px; padding: 0.85rem 1.1rem;
+      min-width: 280px; max-width: 360px;
+      display: flex; flex-direction: column; gap: 0.35rem;
+      animation: slideIn .25s ease;
+    }
+    .toast-header { display: flex; justify-content: space-between; align-items: center; }
+    .toast-title { font-size: 0.82rem; font-weight: 600; }
+    .toast-close { background: none; border: none; color: var(--t3); cursor: pointer; font-size: 1rem; line-height:1; }
+    .toast-url  { font-size: 0.72rem; color: var(--t2); word-break: break-all; }
+    .toast-status { font-size: 0.75rem; }
+    .toast-bar-wrap { background: rgba(255,255,255,.07); border-radius: 4px; height: 4px; overflow: hidden; }
+    .toast-bar { height: 100%; border-radius: 4px; transition: width .4s; }
+    .bar-running { background: var(--purple); animation: pulse 1.4s ease-in-out infinite; }
+    .bar-done    { background: var(--green); width: 100% !important; }
+    .bar-error   { background: var(--red);   width: 100% !important; }
+    @keyframes pulse { 0%,100% { opacity:.6; } 50% { opacity:1; } }
+    @keyframes slideIn { from { transform: translateX(20px); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+
+    /* ── Page body ────────────────────────────────────────────────────────── */
+    main { max-width: 1440px; margin: 0 auto; padding: 2rem; }
+
+    /* ── Stats row ────────────────────────────────────────────────────────── */
+    .stats-row {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+      gap: 1rem; margin-bottom: 1.75rem;
+    }
+    .stat-card {
+      background: var(--glass); border: 1px solid var(--border);
+      border-radius: 14px; padding: 1.1rem 1.3rem;
+      transition: background .2s;
+    }
+    .stat-card:hover { background: rgba(255,255,255,.08); }
+    .stat-val  { font-size: 2rem; font-weight: 700; line-height: 1; }
+    .stat-lbl  { font-size: 0.75rem; color: var(--t2); margin-top: 0.35rem; }
+    .c-purple { color: var(--purple); }
+    .c-green  { color: var(--green); }
+    .c-amber  { color: var(--amber); }
+    .c-pink   { color: var(--pink); }
+    .c-blue   { color: var(--blue); }
+
+    /* ── Filters panel ────────────────────────────────────────────────────── */
+    .filter-panel {
+      display: flex; flex-wrap: wrap; gap: 0.75rem;
+      background: var(--glass); border: 1px solid var(--border);
+      border-radius: 14px; padding: 1.1rem 1.3rem;
+      margin-bottom: 1.5rem; align-items: flex-end;
+    }
+    .fg { display: flex; flex-direction: column; gap: 0.28rem; min-width: 140px; flex: 1; }
+    .fg label { font-size: 0.68rem; color: var(--t2); text-transform: uppercase; letter-spacing: .06em; }
+    select {
+      background: rgba(255,255,255,.07); border: 1px solid var(--border);
+      color: var(--t1); border-radius: 7px; padding: 0.42rem 0.7rem;
+      font-family: 'Outfit', sans-serif; font-size: 0.82rem; cursor: pointer;
+      transition: border-color .2s;
+    }
+    select:focus { outline: none; border-color: var(--purple); }
+    select option { background: #1e293b; }
+    .score-row { display: flex; align-items: center; gap: 0.5rem; }
+    input[type="range"] {
+      flex: 1; accent-color: var(--purple); cursor: pointer;
+    }
+    .score-num { font-size: 0.82rem; font-weight: 600; color: var(--purple); min-width: 16px; text-align: right; }
+    .filter-btns { display: flex; gap: 0.5rem; flex-shrink: 0; }
+    .btn-apply {
+      background: linear-gradient(135deg, var(--purple), var(--pink));
+      color: #fff; padding: 0.42rem 1rem; font-size: 0.82rem; border-radius: 7px;
+    }
+    .btn-apply:hover { opacity: .85; }
+    .btn-reset {
+      background: transparent; border: 1px solid var(--border); color: var(--t2);
+      padding: 0.42rem 0.85rem; font-size: 0.82rem; border-radius: 7px;
+    }
+    .btn-reset:hover { border-color: var(--purple); color: var(--t1); }
+
+    /* ── Table ────────────────────────────────────────────────────────────── */
+    .table-card {
+      background: var(--glass); border: 1px solid var(--border);
+      border-radius: 16px; overflow: hidden;
+    }
+    .table-top {
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 1rem 1.4rem; border-bottom: 1px solid var(--border);
+    }
+    .table-top h2 { font-size: 0.95rem; font-weight: 600; }
+    .res-count { font-size: 0.78rem; color: var(--t2); }
+    .tbl-wrap { overflow-x: auto; }
+    table { width: 100%; border-collapse: collapse; }
+    thead th {
+      text-align: left; padding: 0.75rem 1rem;
+      font-size: 0.68rem; text-transform: uppercase; letter-spacing: .07em;
+      color: var(--t2); border-bottom: 1px solid var(--border);
+      white-space: nowrap; background: rgba(255,255,255,.02);
+    }
+    tbody tr { border-bottom: 1px solid rgba(255,255,255,.04); transition: background .15s; }
+    tbody tr:last-child { border-bottom: none; }
+    tbody tr:hover { background: rgba(255,255,255,.05); }
+    td { padding: 0.85rem 1rem; font-size: 0.83rem; vertical-align: top; }
+
+    /* Company cell */
+    .co-name { font-weight: 600; color: var(--t1); }
+    .co-website { font-size: 0.72rem; color: var(--purple); text-decoration: none; }
+    .co-website:hover { text-decoration: underline; }
+
+    /* Type badge */
+    .badge {
+      display: inline-block; padding: .18rem .55rem; border-radius: 20px;
+      font-size: 0.68rem; font-weight: 600; white-space: nowrap;
+    }
+    .b-sponsor   { background: rgba(139,92,246,.18); color: #c4b5fd; }
+    .b-speaker   { background: rgba(16,185,129,.18);  color: #6ee7b7; }
+    .b-exhibitor { background: rgba(245,158,11,.18);  color: #fcd34d; }
+
+    /* ICP score */
+    .score-pill {
+      display: inline-flex; align-items: center; justify-content: center;
+      width: 30px; height: 30px; border-radius: 50%;
+      font-size: 0.78rem; font-weight: 700;
+    }
+    .sh { background: rgba(16,185,129,.22);  color: #6ee7b7; }
+    .sm { background: rgba(245,158,11,.22);  color: #fcd34d; }
+    .sl { background: rgba(239,68,68,.22);   color: #fca5a5; }
+
+    /* Notes */
+    .notes { font-size: 0.76rem; color: var(--t2); max-width: 240px; line-height: 1.45; }
+
+    /* Headcount / country */
+    .meta { font-size: 0.76rem; color: var(--t2); }
+
+    /* Event link */
+    .ev-link { font-size: 0.72rem; color: var(--t2); text-decoration: none; }
+    .ev-link:hover { color: var(--purple); }
+
+    /* Empty / loading states */
+    .state-box { text-align: center; padding: 4rem 2rem; color: var(--t2); }
+    .state-icon { font-size: 2.5rem; margin-bottom: 0.75rem; }
+    .spinner {
+      width: 30px; height: 30px; margin: 0 auto 0.75rem;
+      border: 3px solid var(--border); border-top-color: var(--purple);
+      border-radius: 50%; animation: spin .65s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* Jobs panel (slide down) */
+    #jobs-panel {
+      display: none;
+      background: var(--bg2); border: 1px solid var(--border); border-radius: 14px;
+      padding: 1.1rem; margin-bottom: 1.5rem;
+    }
+    #jobs-panel h3 { font-size: 0.85rem; font-weight: 600; margin-bottom: 0.75rem; color: var(--t2); }
+    .job-row {
+      display: flex; align-items: center; gap: 0.75rem;
+      padding: 0.5rem 0; border-bottom: 1px solid var(--border); font-size: 0.8rem;
+    }
+    .job-row:last-child { border-bottom: none; }
+    .job-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+    .dot-running { background: var(--purple); animation: pulse 1.2s ease-in-out infinite; }
+    .dot-done    { background: var(--green); }
+    .dot-error   { background: var(--red); }
+    .job-url { flex: 1; color: var(--t2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .job-stat { color: var(--t2); white-space: nowrap; }
+
+    @media (max-width: 768px) {
+      nav { padding: 0 1rem; gap: 0.75rem; }
+      .nav-brand-sub { display: none; }
+      main { padding: 1rem; }
+      .stats-row { grid-template-columns: repeat(2, 1fr); }
+    }
+  </style>
+</head>
+<body>
+
+<!-- ── Navigation bar ───────────────────────────────────────────────────── -->
+<nav>
+  <div class="nav-brand">
+    <div class="nav-brand-icon">&#127760;</div>
+    <div>
+      <div class="nav-brand-text">Event Intelligence</div>
+      <div class="nav-brand-sub">TiDB &amp; Db9.ai</div>
+    </div>
+  </div>
+
+  <div class="nav-divider"></div>
+
+  <form class="nav-scrape" onsubmit="startScrape(event)">
+    <label for="nav-url">Event URL</label>
+    <input
+      type="url" id="nav-url" name="event_url"
+      placeholder="https://example-event.com/sponsors"
+      autocomplete="off"
+    />
+    <button class="btn btn-scrape" id="scrape-btn" type="submit">
+      &#9654; Scrape
+    </button>
+  </form>
+
+  <div class="nav-jobs">
+    <button class="btn btn-sm" onclick="toggleJobsPanel()">Jobs</button>
+    <span id="jobs-badge" style="display:none"></span>
+  </div>
+</nav>
+
+<!-- ── Jobs panel (inline) ──────────────────────────────────────────────── -->
+<div style="max-width:1440px;margin:0 auto;padding:0 2rem">
+  <div id="jobs-panel">
+    <h3>Scrape Jobs</h3>
+    <div id="jobs-list"><span style="color:var(--t3);font-size:.8rem">No jobs yet.</span></div>
+  </div>
+</div>
+
+<!-- ── Main ─────────────────────────────────────────────────────────────── -->
+<main>
+
+  <!-- Stats row -->
+  <div class="stats-row">
+    <div class="stat-card"><div class="stat-val c-purple" id="s-total">—</div><div class="stat-lbl">Companies Found</div></div>
+    <div class="stat-card"><div class="stat-val c-green"  id="s-high">—</div><div class="stat-lbl">High ICP (8–10)</div></div>
+    <div class="stat-card"><div class="stat-val c-amber"  id="s-mid">—</div><div class="stat-lbl">Medium ICP (5–7)</div></div>
+    <div class="stat-card"><div class="stat-val c-pink"   id="s-events">—</div><div class="stat-lbl">Events Scraped</div></div>
+    <div class="stat-card"><div class="stat-val c-blue"   id="s-countries">—</div><div class="stat-lbl">Countries</div></div>
+  </div>
+
+  <!-- Filter panel -->
+  <div class="filter-panel">
+    <div class="fg">
+      <label>Event</label>
+      <select id="f-event"><option value="">All Events</option></select>
+    </div>
+    <div class="fg">
+      <label>Type</label>
+      <select id="f-type">
+        <option value="">All Types</option>
+        <option value="sponsor">Sponsor</option>
+        <option value="speaker">Speaker</option>
+        <option value="exhibitor">Exhibitor</option>
+      </select>
+    </div>
+    <div class="fg">
+      <label>Headcount</label>
+      <select id="f-headcount">
+        <option value="">Any Size</option>
+        <option value="1-10">1–10</option>
+        <option value="11-50">11–50</option>
+        <option value="51-200">51–200</option>
+        <option value="201-1000">201–1,000</option>
+        <option value="1001-5000">1,001–5,000</option>
+        <option value="5000+">5,000+</option>
+      </select>
+    </div>
+    <div class="fg">
+      <label>HQ Country</label>
+      <select id="f-country"><option value="">All Countries</option></select>
+    </div>
+    <div class="fg">
+      <label>Industry</label>
+      <select id="f-industry"><option value="">All Industries</option></select>
+    </div>
+    <div class="fg">
+      <label>Min ICP Score</label>
+      <div class="score-row">
+        <input type="range" id="f-score" min="1" max="10" value="1" step="1"
+               oninput="document.getElementById('score-num').textContent=this.value" />
+        <span class="score-num" id="score-num">1</span>
+      </div>
+    </div>
+    <div class="filter-btns">
+      <button class="btn btn-apply" onclick="applyFilters()">Apply</button>
+      <button class="btn btn-reset" onclick="resetFilters()">Reset</button>
+    </div>
+  </div>
+
+  <!-- Table -->
+  <div class="table-card">
+    <div class="table-top">
+      <h2>Companies</h2>
+      <span class="res-count" id="res-count"></span>
+    </div>
+    <div class="tbl-wrap">
+      <div id="tbl-body">
+        <div class="state-box"><div class="spinner"></div>Loading data…</div>
+      </div>
+    </div>
+  </div>
+
+</main>
+
+<!-- ── Toast container ──────────────────────────────────────────────────── -->
+<div id="toast-container"></div>
+
+<!-- ── Scripts ──────────────────────────────────────────────────────────── -->
+<script>
+// ── State ──────────────────────────────────────────────────────────────────
+const activeJobs = {};   // job_id -> poll interval ID
+let jobsPanelOpen = false;
+
+// ── Init ───────────────────────────────────────────────────────────────────
+(async function init() {
+  await Promise.all([loadFilters(), loadCompanies()]);
+})();
+
+// ── Scrape trigger ─────────────────────────────────────────────────────────
+async function startScrape(e) {
+  e.preventDefault();
+  const url = document.getElementById('nav-url').value.trim();
+  if (!url) return;
+
+  const btn = document.getElementById('scrape-btn');
+  btn.disabled = true;
+  btn.textContent = '⏳ Starting…';
+
+  try {
+    const res = await fetch('/api/run-agent', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({event_url: url}),
+    });
+    const data = await res.json();
+    if (data.error) throw new Error(data.error);
+
+    document.getElementById('nav-url').value = '';
+    showToast(data.job_id, url);
+    pollJob(data.job_id, url);
+    updateJobsBadge();
+    if (jobsPanelOpen) renderJobsPanel();
+
+  } catch (err) {
+    alert('Failed to start agent: ' + err.message);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '▶ Scrape';
+  }
+}
+
+// ── Job polling ────────────────────────────────────────────────────────────
+function pollJob(jobId, eventUrl) {
+  activeJobs[jobId] = setInterval(async () => {
+    try {
+      const res = await fetch(`/api/job-status/${jobId}`);
+      const job  = await res.json();
+      updateToast(jobId, job);
+      if (jobsPanelOpen) renderJobsPanel();
+
+      if (job.status === 'done' || job.status === 'error') {
+        clearInterval(activeJobs[jobId]);
+        delete activeJobs[jobId];
+        updateJobsBadge();
+        // Refresh table & filters after scrape completes
+        if (job.status === 'done') {
+          await Promise.all([loadFilters(), loadCompanies()]);
+        }
+      }
+    } catch (_) {}
+  }, 4000);
+}
+
+// ── Toast helpers ──────────────────────────────────────────────────────────
+function showToast(jobId, url) {
+  const tc = document.getElementById('toast-container');
+  const t  = document.createElement('div');
+  t.className = 'toast';
+  t.id = `toast-${jobId}`;
+  t.innerHTML = toastHTML(jobId, url, {status:'running', companies_saved:0});
+  tc.appendChild(t);
+  // auto-remove after 60s if done
+  setTimeout(() => { if (t.parentNode) t.remove(); }, 60000);
+}
+
+function updateToast(jobId, job) {
+  const t = document.getElementById(`toast-${jobId}`);
+  if (!t) return;
+  t.innerHTML = toastHTML(jobId, job.event_url, job);
+}
+
+function removeToast(jobId) {
+  const t = document.getElementById(`toast-${jobId}`);
+  if (t) t.remove();
+}
+
+function toastHTML(jobId, url, job) {
+  const hostname = (() => { try { return new URL(url).hostname; } catch { return url; } })();
+  const saved    = job.companies_saved ?? 0;
+  const status   = job.status ?? 'running';
+  const barClass = status === 'done' ? 'bar-done' : status === 'error' ? 'bar-error' : 'bar-running';
+  const label    = status === 'done'    ? `Done — ${saved} companies saved`
+                 : status === 'error'   ? `Error: ${job.error ?? 'unknown'}`
+                 : `Running… ${saved} saved so far`;
+  const barW     = status === 'running' ? '60%' : '100%';
+  return `
+    <div class="toast-header">
+      <span class="toast-title">${status === 'done' ? '✅' : status === 'error' ? '❌' : '⚙️'} Agent Job</span>
+      <button class="toast-close" onclick="removeToast('${jobId}')">✕</button>
+    </div>
+    <div class="toast-url">${esc(hostname)}</div>
+    <div class="toast-status" style="color:${status==='done'?'var(--green)':status==='error'?'var(--red)':'var(--t2)'}">${label}</div>
+    <div class="toast-bar-wrap"><div class="toast-bar ${barClass}" style="width:${barW}"></div></div>
+  `;
+}
+
+// ── Jobs panel ─────────────────────────────────────────────────────────────
+function toggleJobsPanel() {
+  jobsPanelOpen = !jobsPanelOpen;
+  const panel = document.getElementById('jobs-panel');
+  panel.style.display = jobsPanelOpen ? 'block' : 'none';
+  if (jobsPanelOpen) renderJobsPanel();
+}
+
+async function renderJobsPanel() {
+  try {
+    const res  = await fetch('/api/jobs');
+    const jobs = await res.json();
+    const list = document.getElementById('jobs-list');
+    if (!jobs.length) { list.innerHTML = '<span style="color:var(--t3);font-size:.8rem">No jobs yet.</span>'; return; }
+    list.innerHTML = jobs.map(j => {
+      const dotClass = j.status === 'done' ? 'dot-done' : j.status === 'error' ? 'dot-error' : 'dot-running';
+      const stat     = j.status === 'done'  ? `${j.companies_saved ?? 0} companies`
+                     : j.status === 'error' ? 'Error'
+                     : 'Running…';
+      const hostname = (() => { try { return new URL(j.event_url).hostname; } catch { return j.event_url; } })();
+      return `<div class="job-row">
+        <span class="job-dot ${dotClass}"></span>
+        <span class="job-url" title="${esc(j.event_url)}">${esc(hostname)}</span>
+        <span class="job-stat">${stat}</span>
+      </div>`;
+    }).join('');
+  } catch (_) {}
+}
+
+function updateJobsBadge() {
+  const count = Object.keys(activeJobs).length;
+  const badge = document.getElementById('jobs-badge');
+  if (count > 0) {
+    badge.textContent = count;
+    badge.style.display = 'flex';
+  } else {
+    badge.style.display = 'none';
+  }
+}
+
+// ── Filters ────────────────────────────────────────────────────────────────
+async function loadFilters() {
+  try {
+    const res  = await fetch('/api/filters');
+    const data = await res.json();
+    populate('f-event',   data.event_url   || [], v => { try { return new URL(v).hostname; } catch { return v; } });
+    populate('f-country', data.hq_country  || []);
+    populate('f-industry',data.industry    || []);
+  } catch (e) { console.error(e); }
+}
+
+function populate(id, values, labelFn = v => v) {
+  const sel = document.getElementById(id);
+  // Remove old dynamic options
+  while (sel.options.length > 1) sel.remove(1);
+  values.filter(Boolean).forEach(v => {
+    const o = document.createElement('option');
+    o.value = v; o.textContent = labelFn(v); sel.appendChild(o);
+  });
+}
+
+function applyFilters() {
+  const score = document.getElementById('f-score').value;
+  loadCompanies({
+    event_url:       document.getElementById('f-event').value,
+    company_type:    document.getElementById('f-type').value,
+    headcount_range: document.getElementById('f-headcount').value,
+    hq_country:      document.getElementById('f-country').value,
+    industry:        document.getElementById('f-industry').value,
+    min_icp_score:   score > 1 ? score : '',
+  });
+}
+
+function resetFilters() {
+  ['f-event','f-type','f-headcount','f-country','f-industry'].forEach(id =>
+    document.getElementById(id).value = ''
+  );
+  const s = document.getElementById('f-score');
+  s.value = 1;
+  document.getElementById('score-num').textContent = '1';
+  loadCompanies();
+}
+
+// ── Data ───────────────────────────────────────────────────────────────────
+async function loadCompanies(params = {}) {
+  const qs = new URLSearchParams(
+    Object.fromEntries(Object.entries(params).filter(([,v]) => v))
+  ).toString();
+  document.getElementById('tbl-body').innerHTML =
+    '<div class="state-box"><div class="spinner"></div>Loading…</div>';
+  try {
+    const res  = await fetch('/api/companies' + (qs ? '?' + qs : ''));
+    const rows = await res.json();
+    renderTable(rows);
+    updateStats(rows);
+  } catch (e) {
+    document.getElementById('tbl-body').innerHTML =
+      `<div class="state-box"><div class="state-icon">⚠️</div>Error: ${e.message}</div>`;
+  }
+}
+
+// ── Stats ──────────────────────────────────────────────────────────────────
+function updateStats(rows) {
+  document.getElementById('s-total').textContent    = rows.length;
+  document.getElementById('s-high').textContent     = rows.filter(r => r.icp_score >= 8).length;
+  document.getElementById('s-mid').textContent      = rows.filter(r => r.icp_score >= 5 && r.icp_score < 8).length;
+  document.getElementById('s-events').textContent   = new Set(rows.map(r => r.event_url)).size;
+  document.getElementById('s-countries').textContent= new Set(rows.map(r => r.hq_country).filter(Boolean)).size;
+  document.getElementById('res-count').textContent  =
+    `${rows.length} result${rows.length !== 1 ? 's' : ''}`;
+}
+
+// ── Table render ───────────────────────────────────────────────────────────
+function scoreClass(s) { return s >= 8 ? 'sh' : s >= 5 ? 'sm' : 'sl'; }
+
+function renderTable(rows) {
+  if (!rows.length) {
+    document.getElementById('tbl-body').innerHTML =
+      '<div class="state-box"><div class="state-icon">🔍</div>No companies match the current filters.</div>';
+    return;
+  }
+  const trs = rows.map(r => `
+    <tr>
+      <td>
+        ${r.website_url
+          ? `<a class="co-name" href="${r.website_url}" target="_blank" rel="noopener">${esc(r.company_name)}</a>`
+          : `<span class="co-name">${esc(r.company_name)}</span>`}
+        ${r.website_url
+          ? `<br><a class="co-website" href="${r.website_url}" target="_blank" rel="noopener">${esc(r.website_url)}</a>`
+          : ''}
+      </td>
+      <td><span class="badge b-${r.company_type || 'sponsor'}">${esc(r.company_type || '—')}</span></td>
+      <td><span class="score-pill ${scoreClass(r.icp_score)}">${r.icp_score}</span></td>
+      <td><div class="notes">${esc(r.icp_notes || '—')}</div></td>
+      <td><span class="meta">${esc(r.industry || '—')}</span></td>
+      <td><span class="meta">${esc(r.headcount_range || '—')}</span></td>
+      <td><span class="meta">${esc(r.revenue_range || '—')}</span></td>
+      <td><span class="meta">${esc(r.hq_country || '—')}</span></td>
+      <td>
+        <a class="ev-link" href="${r.event_url}" target="_blank" rel="noopener">
+          ${esc((() => { try { return new URL(r.event_url).hostname; } catch { return r.event_url; } })())}
+        </a>
+        ${r.event_name ? `<br><span style="font-size:.7rem;color:var(--t3)">${esc(r.event_name)}</span>` : ''}
+      </td>
+    </tr>
+  `).join('');
+
+  document.getElementById('tbl-body').innerHTML = `
+    <table>
+      <thead>
+        <tr>
+          <th>Company</th>
+          <th>Type</th>
+          <th>ICP</th>
+          <th>ICP Notes</th>
+          <th>Industry</th>
+          <th>Headcount</th>
+          <th>Revenue</th>
+          <th>Country</th>
+          <th>Event</th>
+        </tr>
+      </thead>
+      <tbody>${trs}</tbody>
+    </table>`;
+}
+
+// ── Utils ──────────────────────────────────────────────────────────────────
+function esc(s) {
+  if (!s) return '';
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+</script>
+</body>
+</html>

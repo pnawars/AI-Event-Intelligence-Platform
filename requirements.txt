@@ -1,0 +1,5 @@
+anthropic>=0.49.0
+PyMySQL>=1.1.1
+cryptography>=42.0.0
+python-dotenv>=1.0.0
+schedule>=1.2.2
