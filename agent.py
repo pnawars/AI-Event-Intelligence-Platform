@@ -241,11 +241,30 @@ def _prune_messages(messages: list) -> list:
     """
     Keep the conversation window small to prevent input token explosion
     from accumulated web search results.
-    Preserves: first user message + last (MAX_MESSAGES - 1) messages.
+
+    Preserves the initial user message + the most recent (MAX_MESSAGES - 1)
+    messages.  Crucially, we never start the tail with an orphaned tool_result
+    block (a user message whose parent tool_use was pruned away), because that
+    causes a 400 "unexpected tool_use_id" error from the API.
     """
     if len(messages) <= MAX_MESSAGES:
         return messages
-    return [messages[0]] + messages[-(MAX_MESSAGES - 1):]
+
+    tail = messages[-(MAX_MESSAGES - 1):]
+
+    # Walk forward past any leading tool_result user-messages whose parent
+    # tool_use blocks were removed by the slice above.
+    while tail and tail[0]["role"] == "user":
+        content = tail[0].get("content", "")
+        if isinstance(content, list) and any(
+            isinstance(b, dict) and b.get("type") == "tool_result"
+            for b in content
+        ):
+            tail = tail[1:]   # skip — would be orphaned
+        else:
+            break             # plain text user message — safe to keep
+
+    return [messages[0]] + tail
 
 
 def run_agent() -> dict:
@@ -288,7 +307,7 @@ def run_agent() -> dict:
         except anthropic.RateLimitError as exc:
             import time
             # Exponential backoff: 2m, 4m, 8m … capped at 16m
-            wait = min(120 * (2 ** min(iteration - 1, 3)), 960)
+            wait = min(60 * (2 ** min(iteration - 1, 2)), 120)
             logger.warning("Rate limit hit (iteration %d) — sleeping %ds. Error: %s", iteration, wait, exc)
             time.sleep(wait)
             continue

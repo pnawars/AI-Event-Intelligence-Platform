@@ -3,21 +3,24 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Event Intelligence | TiDB / Db9.ai</title>
+  <title>AI Event Pipeline | TiDB / Db9.ai</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
   <style>
     :root {
-      --bg: #0f172a;
-      --bg2: #1e293b;
+      --bg:     #0f172a;
+      --bg2:    #1e293b;
+      --bg3:    #162032;
       --purple: #8b5cf6;
-      --pink: #ec4899;
-      --green: #10b981;
-      --amber: #f59e0b;
-      --red: #ef4444;
-      --blue: #3b82f6;
-      --glass: rgba(255,255,255,0.05);
+      --pink:   #ec4899;
+      --green:  #10b981;
+      --amber:  #f59e0b;
+      --red:    #ef4444;
+      --blue:   #3b82f6;
+      --cyan:   #06b6d4;
+      --glass:  rgba(255,255,255,0.05);
       --border: rgba(255,255,255,0.09);
       --t1: #f8fafc;
       --t2: #94a3b8;
@@ -30,22 +33,21 @@
       color: var(--t1);
       min-height: 100vh;
       background-image:
-        radial-gradient(ellipse at 10% 0%,   rgba(139,92,246,.14) 0%, transparent 45%),
-        radial-gradient(ellipse at 90% 100%,  rgba(236,72,153,.12) 0%, transparent 45%);
+        radial-gradient(ellipse at 10% 0%,  rgba(139,92,246,.14) 0%, transparent 45%),
+        radial-gradient(ellipse at 90% 100%, rgba(236,72,153,.12) 0%, transparent 45%);
     }
 
-    /* ── Nav bar ──────────────────────────────────────────────────────────── */
+    /* ── Nav ───────────────────────────────────────────────────────────── */
     nav {
       position: sticky; top: 0; z-index: 100;
-      background: rgba(15,23,42,.85);
+      background: rgba(15,23,42,.88);
       backdrop-filter: blur(16px);
       border-bottom: 1px solid var(--border);
-      padding: 0 2rem;
-      height: 64px;
+      padding: 0 2rem; height: 64px;
       display: flex; align-items: center; gap: 1.5rem;
     }
     .nav-brand {
-      display: flex; align-items: center; gap: 0.65rem;
+      display: flex; align-items: center; gap: .65rem;
       flex-shrink: 0; text-decoration: none; color: inherit;
     }
     .nav-brand-icon {
@@ -55,27 +57,20 @@
       font-size: 1rem;
     }
     .nav-brand-text { font-size: 1rem; font-weight: 700; }
-    .nav-brand-sub  { font-size: 0.72rem; color: var(--t2); font-weight: 400; }
-
+    .nav-brand-sub  { font-size: .72rem; color: var(--t2); font-weight: 400; }
     .nav-divider { width: 1px; height: 28px; background: var(--border); flex-shrink: 0; }
-
-    /* Event URL input row */
     .nav-scrape {
-      flex: 1; display: flex; align-items: center; gap: 0.6rem;
+      flex: 1; display: flex; align-items: center; gap: .6rem;
     }
     .nav-scrape label {
-      font-size: 0.78rem; color: var(--t2); white-space: nowrap; flex-shrink: 0;
+      font-size: .78rem; color: var(--t2); white-space: nowrap; flex-shrink: 0;
     }
     .nav-scrape input[type="url"] {
       flex: 1; min-width: 0;
-      background: rgba(255,255,255,0.07);
-      border: 1px solid var(--border);
-      border-radius: 8px;
-      color: var(--t1);
-      font-family: 'Outfit', sans-serif;
-      font-size: 0.85rem;
-      padding: 0.45rem 0.85rem;
-      transition: border-color .2s;
+      background: rgba(255,255,255,.07); border: 1px solid var(--border);
+      border-radius: 8px; color: var(--t1);
+      font-family: 'Outfit', sans-serif; font-size: .85rem;
+      padding: .45rem .85rem; transition: border-color .2s;
     }
     .nav-scrape input[type="url"]::placeholder { color: var(--t3); }
     .nav-scrape input[type="url"]:focus { outline: none; border-color: var(--purple); }
@@ -87,56 +82,103 @@
     }
     .btn-scrape {
       background: linear-gradient(135deg, var(--purple), var(--pink));
-      color: #fff; padding: 0.45rem 1.1rem; font-size: 0.85rem;
+      color: #fff; padding: .45rem 1.1rem; font-size: .85rem;
     }
     .btn-scrape:hover:not(:disabled) { opacity: .85; transform: translateY(-1px); }
     .btn-scrape:disabled { opacity: .45; cursor: not-allowed; }
     .btn-sm {
-      padding: 0.3rem 0.7rem; font-size: 0.78rem;
+      padding: .3rem .7rem; font-size: .78rem;
       background: var(--glass); border: 1px solid var(--border); color: var(--t2);
     }
     .btn-sm:hover { border-color: var(--purple); color: var(--t1); }
+    .btn-direct {
+      background: linear-gradient(135deg, var(--cyan), var(--blue));
+      color: #fff; padding: .45rem 1rem; font-size: .85rem;
+    }
+    .btn-direct:hover:not(:disabled) { opacity: .85; transform: translateY(-1px); }
+    .btn-direct:disabled { opacity: .45; cursor: not-allowed; }
+    .btn-pipeline {
+      background: linear-gradient(135deg, var(--green), var(--cyan));
+      color: #fff; padding: .4rem 1rem; font-size: .82rem;
+    }
 
-    /* Jobs pill */
+    /* ── Credit error banner ─────────────────────────────────────────────── */
+    .credit-banner {
+      background: rgba(239,68,68,.12); border: 1px solid rgba(239,68,68,.35);
+      border-radius: 12px; padding: .9rem 1.3rem;
+      display: flex; align-items: center; gap: .85rem;
+      margin-bottom: 1.25rem; font-size: .85rem;
+    }
+    .credit-banner-icon { font-size: 1.3rem; flex-shrink: 0; }
+    .credit-banner a { color: var(--red); font-weight: 600; }
+    .credit-banner a:hover { text-decoration: underline; }
+    .btn-pipeline:hover:not(:disabled) { opacity: .85; }
+    .btn-pipeline:disabled { opacity: .45; cursor: not-allowed; }
+
     .nav-jobs { flex-shrink: 0; position: relative; }
     #jobs-badge {
-      display: none;
-      position: absolute; top: -4px; right: -4px;
+      display: none; position: absolute; top: -4px; right: -4px;
       width: 16px; height: 16px; border-radius: 50%;
       background: var(--purple); color: #fff;
-      font-size: 0.6rem; font-weight: 700;
+      font-size: .6rem; font-weight: 700;
       align-items: center; justify-content: center;
     }
 
-    /* ── Job status toast ─────────────────────────────────────────────────── */
+    /* ── Toast ─────────────────────────────────────────────────────────── */
     #toast-container {
       position: fixed; bottom: 1.5rem; right: 1.5rem;
-      display: flex; flex-direction: column; gap: 0.6rem; z-index: 999;
+      display: flex; flex-direction: column; gap: .6rem; z-index: 999;
     }
     .toast {
       background: var(--bg2); border: 1px solid var(--border);
-      border-radius: 12px; padding: 0.85rem 1.1rem;
+      border-radius: 12px; padding: .85rem 1.1rem;
       min-width: 280px; max-width: 360px;
-      display: flex; flex-direction: column; gap: 0.35rem;
+      display: flex; flex-direction: column; gap: .35rem;
       animation: slideIn .25s ease;
     }
     .toast-header { display: flex; justify-content: space-between; align-items: center; }
-    .toast-title { font-size: 0.82rem; font-weight: 600; }
-    .toast-close { background: none; border: none; color: var(--t3); cursor: pointer; font-size: 1rem; line-height:1; }
-    .toast-url  { font-size: 0.72rem; color: var(--t2); word-break: break-all; }
-    .toast-status { font-size: 0.75rem; }
+    .toast-title  { font-size: .82rem; font-weight: 600; }
+    .toast-close  { background: none; border: none; color: var(--t3); cursor: pointer; font-size: 1rem; line-height:1; }
+    .toast-url    { font-size: .72rem; color: var(--t2); word-break: break-all; }
+    .toast-status { font-size: .75rem; }
     .toast-bar-wrap { background: rgba(255,255,255,.07); border-radius: 4px; height: 4px; overflow: hidden; }
     .toast-bar { height: 100%; border-radius: 4px; transition: width .4s; }
     .bar-running { background: var(--purple); animation: pulse 1.4s ease-in-out infinite; }
     .bar-done    { background: var(--green); width: 100% !important; }
     .bar-error   { background: var(--red);   width: 100% !important; }
-    @keyframes pulse { 0%,100% { opacity:.6; } 50% { opacity:1; } }
-    @keyframes slideIn { from { transform: translateX(20px); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+    @keyframes pulse   { 0%,100% { opacity:.6; } 50% { opacity:1; } }
+    @keyframes slideIn { from { transform: translateX(20px); opacity:0; } to { transform: translateX(0); opacity:1; } }
 
-    /* ── Page body ────────────────────────────────────────────────────────── */
+    /* ── Page body ─────────────────────────────────────────────────────── */
     main { max-width: 1440px; margin: 0 auto; padding: 2rem; }
 
-    /* ── Stats row ────────────────────────────────────────────────────────── */
+    /* ── Pipeline status panel ─────────────────────────────────────────── */
+    .pipeline-panel {
+      background: var(--glass); border: 1px solid var(--border);
+      border-radius: 14px; padding: 1.1rem 1.4rem;
+      margin-bottom: 1.5rem;
+      display: flex; align-items: center; gap: 1.5rem; flex-wrap: wrap;
+    }
+    .pipeline-label {
+      font-size: .72rem; color: var(--t2); text-transform: uppercase; letter-spacing: .06em;
+      margin-bottom: .15rem;
+    }
+    .pipeline-val {
+      font-size: .88rem; font-weight: 600; color: var(--t1);
+    }
+    .pipeline-section { display: flex; flex-direction: column; }
+    .pipeline-divider { width: 1px; height: 36px; background: var(--border); }
+    .pipeline-spacer  { flex: 1; }
+    .pipeline-status-dot {
+      width: 8px; height: 8px; border-radius: 50%; display: inline-block;
+      margin-right: .4rem; vertical-align: middle;
+    }
+    .dot-idle    { background: var(--t3); }
+    .dot-running { background: var(--green); animation: pulse 1.2s ease-in-out infinite; }
+    .dot-done    { background: var(--green); }
+    .dot-error   { background: var(--red); }
+
+    /* ── Stats row ─────────────────────────────────────────────────────── */
     .stats-row {
       display: grid;
       grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
@@ -144,53 +186,78 @@
     }
     .stat-card {
       background: var(--glass); border: 1px solid var(--border);
-      border-radius: 14px; padding: 1.1rem 1.3rem;
-      transition: background .2s;
+      border-radius: 14px; padding: 1.1rem 1.3rem; transition: background .2s;
     }
     .stat-card:hover { background: rgba(255,255,255,.08); }
     .stat-val  { font-size: 2rem; font-weight: 700; line-height: 1; }
-    .stat-lbl  { font-size: 0.75rem; color: var(--t2); margin-top: 0.35rem; }
+    .stat-lbl  { font-size: .75rem; color: var(--t2); margin-top: .35rem; }
     .c-purple { color: var(--purple); }
     .c-green  { color: var(--green); }
     .c-amber  { color: var(--amber); }
     .c-pink   { color: var(--pink); }
     .c-blue   { color: var(--blue); }
+    .c-cyan   { color: var(--cyan); }
 
-    /* ── Filters panel ────────────────────────────────────────────────────── */
+    /* ── Charts row ────────────────────────────────────────────────────── */
+    .charts-row {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+      gap: 1rem; margin-bottom: 1.5rem;
+    }
+    .chart-card {
+      background: var(--glass); border: 1px solid var(--border);
+      border-radius: 14px; padding: 1.1rem 1.3rem;
+    }
+    .chart-title {
+      font-size: .78rem; font-weight: 600; color: var(--t2);
+      text-transform: uppercase; letter-spacing: .06em; margin-bottom: .85rem;
+    }
+    .chart-wrap { position: relative; height: 200px; }
+
+    /* ── Filters panel ─────────────────────────────────────────────────── */
     .filter-panel {
-      display: flex; flex-wrap: wrap; gap: 0.75rem;
+      display: flex; flex-wrap: wrap; gap: .75rem;
       background: var(--glass); border: 1px solid var(--border);
       border-radius: 14px; padding: 1.1rem 1.3rem;
       margin-bottom: 1.5rem; align-items: flex-end;
     }
-    .fg { display: flex; flex-direction: column; gap: 0.28rem; min-width: 140px; flex: 1; }
-    .fg label { font-size: 0.68rem; color: var(--t2); text-transform: uppercase; letter-spacing: .06em; }
+    .fg { display: flex; flex-direction: column; gap: .28rem; min-width: 130px; flex: 1; }
+    .fg label { font-size: .68rem; color: var(--t2); text-transform: uppercase; letter-spacing: .06em; }
     select {
       background: rgba(255,255,255,.07); border: 1px solid var(--border);
-      color: var(--t1); border-radius: 7px; padding: 0.42rem 0.7rem;
-      font-family: 'Outfit', sans-serif; font-size: 0.82rem; cursor: pointer;
+      color: var(--t1); border-radius: 7px; padding: .42rem .7rem;
+      font-family: 'Outfit', sans-serif; font-size: .82rem; cursor: pointer;
       transition: border-color .2s;
     }
     select:focus { outline: none; border-color: var(--purple); }
     select option { background: #1e293b; }
-    .score-row { display: flex; align-items: center; gap: 0.5rem; }
-    input[type="range"] {
-      flex: 1; accent-color: var(--purple); cursor: pointer;
-    }
-    .score-num { font-size: 0.82rem; font-weight: 600; color: var(--purple); min-width: 16px; text-align: right; }
-    .filter-btns { display: flex; gap: 0.5rem; flex-shrink: 0; }
+    .score-row { display: flex; align-items: center; gap: .5rem; }
+    input[type="range"] { flex: 1; accent-color: var(--purple); cursor: pointer; }
+    .score-num { font-size: .82rem; font-weight: 600; color: var(--purple); min-width: 16px; text-align: right; }
+    .filter-btns { display: flex; gap: .5rem; flex-shrink: 0; }
     .btn-apply {
       background: linear-gradient(135deg, var(--purple), var(--pink));
-      color: #fff; padding: 0.42rem 1rem; font-size: 0.82rem; border-radius: 7px;
+      color: #fff; padding: .42rem 1rem; font-size: .82rem; border-radius: 7px;
     }
     .btn-apply:hover { opacity: .85; }
     .btn-reset {
       background: transparent; border: 1px solid var(--border); color: var(--t2);
-      padding: 0.42rem 0.85rem; font-size: 0.82rem; border-radius: 7px;
+      padding: .42rem .85rem; font-size: .82rem; border-radius: 7px;
     }
     .btn-reset:hover { border-color: var(--purple); color: var(--t1); }
 
-    /* ── Table ────────────────────────────────────────────────────────────── */
+    /* ── View toggle ───────────────────────────────────────────────────── */
+    .view-toggle {
+      display: flex; gap: .35rem;
+    }
+    .vbtn {
+      padding: .28rem .65rem; font-size: .75rem;
+      background: var(--glass); border: 1px solid var(--border); color: var(--t2);
+      border-radius: 6px; cursor: pointer; transition: all .15s;
+    }
+    .vbtn.active { background: rgba(139,92,246,.25); border-color: var(--purple); color: var(--t1); }
+
+    /* ── Table ─────────────────────────────────────────────────────────── */
     .table-card {
       background: var(--glass); border: 1px solid var(--border);
       border-radius: 16px; overflow: hidden;
@@ -199,117 +266,182 @@
       display: flex; justify-content: space-between; align-items: center;
       padding: 1rem 1.4rem; border-bottom: 1px solid var(--border);
     }
-    .table-top h2 { font-size: 0.95rem; font-weight: 600; }
-    .res-count { font-size: 0.78rem; color: var(--t2); }
+    .table-top h2 { font-size: .95rem; font-weight: 600; }
+    .res-count { font-size: .78rem; color: var(--t2); }
     .tbl-wrap { overflow-x: auto; }
     table { width: 100%; border-collapse: collapse; }
     thead th {
-      text-align: left; padding: 0.75rem 1rem;
-      font-size: 0.68rem; text-transform: uppercase; letter-spacing: .07em;
+      text-align: left; padding: .75rem 1rem;
+      font-size: .68rem; text-transform: uppercase; letter-spacing: .07em;
       color: var(--t2); border-bottom: 1px solid var(--border);
       white-space: nowrap; background: rgba(255,255,255,.02);
     }
     tbody tr { border-bottom: 1px solid rgba(255,255,255,.04); transition: background .15s; }
     tbody tr:last-child { border-bottom: none; }
-    tbody tr:hover { background: rgba(255,255,255,.05); }
-    td { padding: 0.85rem 1rem; font-size: 0.83rem; vertical-align: top; }
-
-    /* Company cell */
-    .co-name { font-weight: 600; color: var(--t1); }
-    .co-website { font-size: 0.72rem; color: var(--purple); text-decoration: none; }
+    tbody tr:hover { background: rgba(255,255,255,.05); cursor: pointer; }
+    td { padding: .85rem 1rem; font-size: .83rem; vertical-align: top; }
+    .co-name    { font-weight: 600; color: var(--t1); }
+    .co-website { font-size: .72rem; color: var(--purple); text-decoration: none; }
     .co-website:hover { text-decoration: underline; }
 
-    /* Type badge */
+    /* ── Cards grid ────────────────────────────────────────────────────── */
+    .cards-grid {
+      display: none;
+      grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+      gap: 1rem; padding: 1.25rem;
+    }
+    .company-card {
+      background: var(--bg3); border: 1px solid var(--border);
+      border-radius: 14px; padding: 1.15rem 1.2rem;
+      cursor: pointer; transition: all .18s; position: relative; overflow: hidden;
+    }
+    .company-card::before {
+      content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px;
+      background: linear-gradient(90deg, var(--purple), var(--pink));
+      opacity: 0; transition: opacity .18s;
+    }
+    .company-card:hover { border-color: rgba(139,92,246,.4); transform: translateY(-2px); }
+    .company-card:hover::before { opacity: 1; }
+    .card-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: .7rem; }
+    .card-name { font-weight: 700; font-size: .92rem; line-height: 1.3; color: var(--t1); flex: 1; margin-right: .5rem; }
+    .card-body { display: flex; flex-direction: column; gap: .4rem; }
+    .card-row  { display: flex; align-items: center; gap: .45rem; }
+    .card-icon { font-size: .8rem; width: 16px; text-align: center; opacity: .6; }
+    .card-meta { font-size: .77rem; color: var(--t2); }
+    .card-notes { font-size: .75rem; color: var(--t2); line-height: 1.4; margin-top: .55rem; padding-top: .55rem; border-top: 1px solid var(--border); }
+
+    /* ── Badges ────────────────────────────────────────────────────────── */
     .badge {
       display: inline-block; padding: .18rem .55rem; border-radius: 20px;
-      font-size: 0.68rem; font-weight: 600; white-space: nowrap;
+      font-size: .68rem; font-weight: 600; white-space: nowrap;
     }
     .b-sponsor   { background: rgba(139,92,246,.18); color: #c4b5fd; }
     .b-speaker   { background: rgba(16,185,129,.18);  color: #6ee7b7; }
     .b-exhibitor { background: rgba(245,158,11,.18);  color: #fcd34d; }
 
-    /* ICP score */
+    /* ── ICP score pill ────────────────────────────────────────────────── */
     .score-pill {
       display: inline-flex; align-items: center; justify-content: center;
       width: 30px; height: 30px; border-radius: 50%;
-      font-size: 0.78rem; font-weight: 700;
+      font-size: .78rem; font-weight: 700; flex-shrink: 0;
     }
     .sh { background: rgba(16,185,129,.22);  color: #6ee7b7; }
     .sm { background: rgba(245,158,11,.22);  color: #fcd34d; }
     .sl { background: rgba(239,68,68,.22);   color: #fca5a5; }
 
-    /* Notes */
-    .notes { font-size: 0.76rem; color: var(--t2); max-width: 240px; line-height: 1.45; }
-
-    /* Headcount / country */
-    .meta { font-size: 0.76rem; color: var(--t2); }
-
-    /* Event link */
-    .ev-link { font-size: 0.72rem; color: var(--t2); text-decoration: none; }
+    .notes { font-size: .76rem; color: var(--t2); max-width: 240px; line-height: 1.45; }
+    .meta  { font-size: .76rem; color: var(--t2); }
+    .ev-link { font-size: .72rem; color: var(--t2); text-decoration: none; }
     .ev-link:hover { color: var(--purple); }
 
-    /* Empty / loading states */
+    /* ── Empty / loading ───────────────────────────────────────────────── */
     .state-box { text-align: center; padding: 4rem 2rem; color: var(--t2); }
-    .state-icon { font-size: 2.5rem; margin-bottom: 0.75rem; }
+    .state-icon { font-size: 2.5rem; margin-bottom: .75rem; }
     .spinner {
-      width: 30px; height: 30px; margin: 0 auto 0.75rem;
+      width: 30px; height: 30px; margin: 0 auto .75rem;
       border: 3px solid var(--border); border-top-color: var(--purple);
       border-radius: 50%; animation: spin .65s linear infinite;
     }
     @keyframes spin { to { transform: rotate(360deg); } }
 
-    /* Jobs panel (slide down) */
+    /* ── Jobs panel ────────────────────────────────────────────────────── */
     #jobs-panel {
       display: none;
       background: var(--bg2); border: 1px solid var(--border); border-radius: 14px;
       padding: 1.1rem; margin-bottom: 1.5rem;
     }
-    #jobs-panel h3 { font-size: 0.85rem; font-weight: 600; margin-bottom: 0.75rem; color: var(--t2); }
+    #jobs-panel h3 { font-size: .85rem; font-weight: 600; margin-bottom: .75rem; color: var(--t2); }
     .job-row {
-      display: flex; align-items: center; gap: 0.75rem;
-      padding: 0.5rem 0; border-bottom: 1px solid var(--border); font-size: 0.8rem;
+      display: flex; align-items: center; gap: .75rem;
+      padding: .5rem 0; border-bottom: 1px solid var(--border); font-size: .8rem;
     }
     .job-row:last-child { border-bottom: none; }
-    .job-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
-    .dot-running { background: var(--purple); animation: pulse 1.2s ease-in-out infinite; }
-    .dot-done    { background: var(--green); }
-    .dot-error   { background: var(--red); }
-    .job-url { flex: 1; color: var(--t2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .job-dot  { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+    .dot-done  { background: var(--green); }
+    .dot-error { background: var(--red); }
+    .job-url  { flex: 1; color: var(--t2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .job-stat { color: var(--t2); white-space: nowrap; }
 
+    /* ── Company detail modal ──────────────────────────────────────────── */
+    .modal-backdrop {
+      display: none; position: fixed; inset: 0;
+      background: rgba(0,0,0,.6); backdrop-filter: blur(4px);
+      z-index: 200; align-items: center; justify-content: center;
+    }
+    .modal-backdrop.open { display: flex; }
+    .modal {
+      background: var(--bg2); border: 1px solid var(--border); border-radius: 18px;
+      width: min(560px, 95vw); max-height: 85vh; overflow-y: auto;
+      padding: 1.75rem; animation: slideIn .2s ease; position: relative;
+    }
+    .modal-close {
+      position: absolute; top: 1rem; right: 1rem;
+      background: none; border: none; color: var(--t3); cursor: pointer;
+      font-size: 1.2rem; line-height: 1; padding: .25rem;
+    }
+    .modal-close:hover { color: var(--t1); }
+    .modal-company-name { font-size: 1.35rem; font-weight: 700; margin-bottom: .3rem; }
+    .modal-website {
+      font-size: .82rem; color: var(--purple); text-decoration: none; display: inline-block; margin-bottom: 1rem;
+    }
+    .modal-website:hover { text-decoration: underline; }
+    .modal-grid {
+      display: grid; grid-template-columns: 1fr 1fr; gap: .65rem 1.5rem; margin-bottom: 1rem;
+    }
+    .modal-field-label { font-size: .68rem; color: var(--t3); text-transform: uppercase; letter-spacing: .06em; margin-bottom: .12rem; }
+    .modal-field-value { font-size: .85rem; font-weight: 500; }
+    .modal-notes-block { background: rgba(255,255,255,.04); border-radius: 10px; padding: .85rem 1rem; }
+    .modal-notes-label { font-size: .68rem; color: var(--t3); text-transform: uppercase; letter-spacing: .06em; margin-bottom: .4rem; }
+    .modal-notes-text  { font-size: .82rem; color: var(--t2); line-height: 1.55; }
+    .modal-score-row   { display: flex; align-items: center; gap: .75rem; margin-bottom: 1rem; }
+    .modal-score-big   {
+      width: 48px; height: 48px; border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 1.3rem; font-weight: 700; flex-shrink: 0;
+    }
+    .modal-event-link { font-size: .78rem; color: var(--t2); margin-top: .5rem; }
+    .modal-event-link a { color: var(--purple); text-decoration: none; }
+    .modal-event-link a:hover { text-decoration: underline; }
+
     @media (max-width: 768px) {
-      nav { padding: 0 1rem; gap: 0.75rem; }
+      nav { padding: 0 1rem; gap: .75rem; }
       .nav-brand-sub { display: none; }
       main { padding: 1rem; }
       .stats-row { grid-template-columns: repeat(2, 1fr); }
+      .charts-row { grid-template-columns: 1fr; }
+      .modal-grid { grid-template-columns: 1fr; }
     }
   </style>
 </head>
 <body>
 
-<!-- ── Navigation bar ───────────────────────────────────────────────────── -->
+<!-- ── Navigation bar ─────────────────────────────────────────────────── -->
 <nav>
   <div class="nav-brand">
     <div class="nav-brand-icon">&#127760;</div>
     <div>
-      <div class="nav-brand-text">Event Intelligence</div>
+      <div class="nav-brand-text">AI Event Pipeline</div>
       <div class="nav-brand-sub">TiDB &amp; Db9.ai</div>
     </div>
   </div>
 
   <div class="nav-divider"></div>
 
-  <form class="nav-scrape" onsubmit="startScrape(event)">
+  <form class="nav-scrape" onsubmit="startDirectScrape(event)">
     <label for="nav-url">Event URL</label>
-    <input
-      type="url" id="nav-url" name="event_url"
-      placeholder="https://example-event.com/sponsors"
-      autocomplete="off"
-    />
-    <button class="btn btn-scrape" id="scrape-btn" type="submit">
-      &#9654; Scrape
+    <input type="url" id="nav-url" name="event_url"
+      placeholder="https://www.bigdataparis.com/" autocomplete="off" />
+    <button class="btn btn-direct" id="direct-btn" type="submit" title="Scrape with headless browser — no Claude API needed">
+      &#128269; Direct
+    </button>
+    <button class="btn btn-scrape" id="scrape-btn" type="button" onclick="startScrape()" title="Scrape + AI enrichment (uses Claude API)">
+      &#129302; AI Scrape
     </button>
   </form>
+
+  <button class="btn btn-pipeline" id="pipeline-btn" onclick="startPipeline()">
+    &#9654;&#9654; Run Pipeline
+  </button>
 
   <div class="nav-jobs">
     <button class="btn btn-sm" onclick="toggleJobsPanel()">Jobs</button>
@@ -317,7 +449,7 @@
   </div>
 </nav>
 
-<!-- ── Jobs panel (inline) ──────────────────────────────────────────────── -->
+<!-- ── Jobs panel ─────────────────────────────────────────────────────── -->
 <div style="max-width:1440px;margin:0 auto;padding:0 2rem">
   <div id="jobs-panel">
     <h3>Scrape Jobs</h3>
@@ -325,8 +457,52 @@
   </div>
 </div>
 
-<!-- ── Main ─────────────────────────────────────────────────────────────── -->
+<!-- ── Main ───────────────────────────────────────────────────────────── -->
 <main>
+
+  <!-- API credit error banner (shown when credits are exhausted) -->
+  <div id="credit-banner" class="credit-banner" style="display:none">
+    <span class="credit-banner-icon">⚠️</span>
+    <div>
+      <strong style="color:var(--red)">Anthropic API credits exhausted</strong> — all agent jobs are failing.
+      Top up at <a href="https://console.anthropic.com" target="_blank" rel="noopener">console.anthropic.com → Plans &amp; Billing</a>,
+      then try again.
+    </div>
+  </div>
+
+  <!-- Pipeline status panel -->
+  <div class="pipeline-panel" id="pipeline-panel">
+    <div class="pipeline-section">
+      <div class="pipeline-label">Pipeline Status</div>
+      <div class="pipeline-val" id="pl-status">
+        <span class="pipeline-status-dot dot-idle"></span>Checking…
+      </div>
+    </div>
+    <div class="pipeline-divider"></div>
+    <div class="pipeline-section">
+      <div class="pipeline-label">Last Run</div>
+      <div class="pipeline-val" id="pl-last-run">—</div>
+    </div>
+    <div class="pipeline-divider"></div>
+    <div class="pipeline-section">
+      <div class="pipeline-label">Events Found</div>
+      <div class="pipeline-val c-purple" id="pl-events">—</div>
+    </div>
+    <div class="pipeline-divider"></div>
+    <div class="pipeline-section">
+      <div class="pipeline-label">Companies Saved</div>
+      <div class="pipeline-val c-green" id="pl-companies">—</div>
+    </div>
+    <div class="pipeline-divider"></div>
+    <div class="pipeline-section">
+      <div class="pipeline-label">Duration</div>
+      <div class="pipeline-val" id="pl-duration">—</div>
+    </div>
+    <div class="pipeline-section" id="pl-errors-section" style="display:none">
+      <div class="pipeline-label" style="color:var(--red)">Errors</div>
+      <div class="pipeline-val" style="color:var(--red)" id="pl-errors">0</div>
+    </div>
+  </div>
 
   <!-- Stats row -->
   <div class="stats-row">
@@ -335,6 +511,23 @@
     <div class="stat-card"><div class="stat-val c-amber"  id="s-mid">—</div><div class="stat-lbl">Medium ICP (5–7)</div></div>
     <div class="stat-card"><div class="stat-val c-pink"   id="s-events">—</div><div class="stat-lbl">Events Scraped</div></div>
     <div class="stat-card"><div class="stat-val c-blue"   id="s-countries">—</div><div class="stat-lbl">Countries</div></div>
+    <div class="stat-card"><div class="stat-val c-cyan"   id="s-industries">—</div><div class="stat-lbl">Industries</div></div>
+  </div>
+
+  <!-- Charts row -->
+  <div class="charts-row" id="charts-row" style="display:none">
+    <div class="chart-card">
+      <div class="chart-title">Companies by Country</div>
+      <div class="chart-wrap"><canvas id="chart-country"></canvas></div>
+    </div>
+    <div class="chart-card">
+      <div class="chart-title">Companies by Industry</div>
+      <div class="chart-wrap"><canvas id="chart-industry"></canvas></div>
+    </div>
+    <div class="chart-card">
+      <div class="chart-title">ICP Score Distribution</div>
+      <div class="chart-wrap"><canvas id="chart-icp"></canvas></div>
+    </div>
   </div>
 
   <!-- Filter panel -->
@@ -365,6 +558,17 @@
       </select>
     </div>
     <div class="fg">
+      <label>Revenue</label>
+      <select id="f-revenue">
+        <option value="">Any Revenue</option>
+        <option value="&lt;$1M">&lt;$1M</option>
+        <option value="$1M-$10M">$1M–$10M</option>
+        <option value="$10M-$50M">$10M–$50M</option>
+        <option value="$50M-$200M">$50M–$200M</option>
+        <option value="$200M+">$200M+</option>
+      </select>
+    </div>
+    <div class="fg">
       <label>HQ Country</label>
       <select id="f-country"><option value="">All Countries</option></select>
     </div>
@@ -372,7 +576,7 @@
       <label>Industry</label>
       <select id="f-industry"><option value="">All Industries</option></select>
     </div>
-    <div class="fg">
+    <div class="fg" style="min-width:120px">
       <label>Min ICP Score</label>
       <div class="score-row">
         <input type="range" id="f-score" min="1" max="10" value="1" step="1"
@@ -386,65 +590,280 @@
     </div>
   </div>
 
-  <!-- Table -->
+  <!-- Table / Cards container -->
   <div class="table-card">
     <div class="table-top">
       <h2>Companies</h2>
-      <span class="res-count" id="res-count"></span>
+      <div style="display:flex;align-items:center;gap:1rem">
+        <span class="res-count" id="res-count"></span>
+        <div class="view-toggle">
+          <button class="vbtn active" id="vbtn-table" onclick="setView('table')">&#9776; Table</button>
+          <button class="vbtn" id="vbtn-cards" onclick="setView('cards')">&#9635; Cards</button>
+        </div>
+      </div>
     </div>
-    <div class="tbl-wrap">
+
+    <div class="tbl-wrap" id="view-table">
       <div id="tbl-body">
         <div class="state-box"><div class="spinner"></div>Loading data…</div>
       </div>
     </div>
+
+    <div class="cards-grid" id="view-cards"></div>
   </div>
 
 </main>
 
-<!-- ── Toast container ──────────────────────────────────────────────────── -->
+<!-- ── Company detail modal ─────────────────────────────────────────────── -->
+<div class="modal-backdrop" id="modal-backdrop" onclick="closeModal(event)">
+  <div class="modal" id="modal-content">
+    <button class="modal-close" onclick="closeModal()">&#10005;</button>
+    <div id="modal-body"></div>
+  </div>
+</div>
+
+<!-- ── Toast container ────────────────────────────────────────────────── -->
 <div id="toast-container"></div>
 
-<!-- ── Scripts ──────────────────────────────────────────────────────────── -->
+<!-- ── Scripts ────────────────────────────────────────────────────────── -->
 <script>
 // ── State ──────────────────────────────────────────────────────────────────
-const activeJobs = {};   // job_id -> poll interval ID
+const activeJobs = {};
 let jobsPanelOpen = false;
+let currentView   = 'table';
+let allRows       = [];
+let charts        = {};
+let pipelinePollId = null;
+
+const CHART_COLORS = [
+  '#8b5cf6','#ec4899','#10b981','#3b82f6','#f59e0b',
+  '#06b6d4','#ef4444','#a855f7','#14b8a6','#f97316',
+];
+
+// ── Credit error detection ──────────────────────────────────────────────────
+function isCreditError(errMsg) {
+  if (!errMsg) return false;
+  const s = String(errMsg).toLowerCase();
+  return s.includes('credit') || s.includes('balance') || s.includes('billing');
+}
+function maybShowCreditBanner(errMsg) {
+  if (isCreditError(errMsg)) {
+    document.getElementById('credit-banner').style.display = 'flex';
+  }
+}
 
 // ── Init ───────────────────────────────────────────────────────────────────
 (async function init() {
   await Promise.all([loadFilters(), loadCompanies()]);
+  loadPipelineStatus();
+  // Check recent jobs for credit errors on page load
+  try {
+    const res  = await fetch('/api/jobs');
+    const jobs = await res.json();
+    jobs.forEach(j => { if (j.status === 'error') maybShowCreditBanner(j.error); });
+  } catch (_) {}
 })();
 
-// ── Scrape trigger ─────────────────────────────────────────────────────────
-async function startScrape(e) {
+// ── Pipeline ───────────────────────────────────────────────────────────────
+async function startPipeline() {
+  const btn = document.getElementById('pipeline-btn');
+  btn.disabled = true; btn.textContent = '⏳ Starting…';
+
+  try {
+    const res  = await fetch('/api/run-pipeline', { method: 'POST' });
+    const data = await res.json();
+    if (data.error) {
+      alert(data.error);
+      return;
+    }
+    setPipelineStatus('running', null);
+    pollPipeline();
+    showToastSimple('Pipeline started — running event sourcing + company enrichment…', 'running');
+  } catch (err) {
+    alert('Failed to start pipeline: ' + err.message);
+  } finally {
+    btn.disabled = false; btn.textContent = '▶▶ Run Pipeline';
+  }
+}
+
+function pollPipeline() {
+  if (pipelinePollId) clearInterval(pipelinePollId);
+  pipelinePollId = setInterval(async () => {
+    try {
+      const res  = await fetch('/api/pipeline-status');
+      const data = await res.json();
+      if (data.status === 'running') {
+        setPipelineStatus('running', null);
+      } else if (data.status === 'done') {
+        clearInterval(pipelinePollId);
+        pipelinePollId = null;
+        renderPipelineStatus(data.summary || data);
+        // Refresh company data after pipeline finishes
+        await Promise.all([loadFilters(), loadCompanies()]);
+        showToastSimple('Pipeline complete!', 'done');
+      } else if (data.status === 'error') {
+        clearInterval(pipelinePollId);
+        pipelinePollId = null;
+        setPipelineStatus('error', null);
+      }
+    } catch (_) {}
+  }, 8000);
+}
+
+async function loadPipelineStatus() {
+  try {
+    const res  = await fetch('/api/pipeline-status');
+    const data = await res.json();
+    if (data.status === 'running') {
+      setPipelineStatus('running', null);
+      pollPipeline();
+    } else if (data.status === 'done' && data.summary) {
+      renderPipelineStatus(data.summary);
+    } else if (data.status === 'never_run') {
+      setPipelineStatus('idle', null);
+    }
+  } catch (_) {}
+}
+
+function setPipelineStatus(status, summary) {
+  const statusEl = document.getElementById('pl-status');
+  const dotClass = { idle:'dot-idle', running:'dot-running', done:'dot-done', error:'dot-error' }[status] || 'dot-idle';
+  const label    = { idle:'Idle', running:'Running…', done:'Done', error:'Error' }[status] || status;
+  statusEl.innerHTML = `<span class="pipeline-status-dot ${dotClass}"></span>${label}`;
+}
+
+function renderPipelineStatus(s) {
+  setPipelineStatus('done', s);
+  document.getElementById('pl-last-run').textContent  = s.finished_at ? fmtDate(s.finished_at) : '—';
+  document.getElementById('pl-events').textContent    = s.events_saved ?? '—';
+  document.getElementById('pl-companies').textContent = s.companies_saved ?? '—';
+  const dur = s.duration_seconds;
+  document.getElementById('pl-duration').textContent  = dur ? fmtDuration(dur) : '—';
+  const errs = (s.errors || []).length;
+  const errSec = document.getElementById('pl-errors-section');
+  if (errs > 0) {
+    errSec.style.display = '';
+    document.getElementById('pl-errors').textContent = errs;
+  } else {
+    errSec.style.display = 'none';
+  }
+}
+
+function fmtDate(iso) {
+  try {
+    return new Date(iso).toLocaleString(undefined, { month:'short', day:'numeric', hour:'2-digit', minute:'2-digit' });
+  } catch { return iso; }
+}
+function fmtDuration(s) {
+  if (s < 60) return s + 's';
+  if (s < 3600) return Math.round(s/60) + 'm';
+  return (s/3600).toFixed(1) + 'h';
+}
+
+// ── Direct scrape (Playwright — no Claude API) ─────────────────────────────
+async function startDirectScrape(e) {
   e.preventDefault();
   const url = document.getElementById('nav-url').value.trim();
   if (!url) return;
 
-  const btn = document.getElementById('scrape-btn');
-  btn.disabled = true;
-  btn.textContent = '⏳ Starting…';
+  const btn = document.getElementById('direct-btn');
+  btn.disabled = true; btn.textContent = '⏳ Scraping…';
 
   try {
-    const res = await fetch('/api/run-agent', {
-      method: 'POST',
-      headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({event_url: url}),
+    const res  = await fetch('/api/scrape-direct', {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ event_url: url }),
     });
     const data = await res.json();
     if (data.error) throw new Error(data.error);
+    document.getElementById('nav-url').value = '';
+    showDirectToast(data.job_id, url);
+    pollDirectJob(data.job_id, url);
+  } catch (err) {
+    alert('Direct scrape failed: ' + err.message);
+  } finally {
+    btn.disabled = false; btn.textContent = '🔍 Direct';
+  }
+}
 
+function pollDirectJob(jobId, url) {
+  const iv = setInterval(async () => {
+    try {
+      const res = await fetch(`/api/scrape-direct-status/${jobId}`);
+      const job = await res.json();
+      updateDirectToast(jobId, job);
+      if (job.status === 'done' || job.status === 'error') {
+        clearInterval(iv);
+        await Promise.all([loadFilters(), loadCompanies()]);
+      }
+      // 'enriching' status keeps polling
+    } catch (_) {}
+  }, 5000);
+}
+
+function showDirectToast(jobId, url) {
+  const tc = document.getElementById('toast-container');
+  const t  = document.createElement('div');
+  t.className = 'toast'; t.id = `dtоast-${jobId}`;
+  t.innerHTML = directToastHTML(jobId, url, {status:'running', saved:0, found:0});
+  tc.appendChild(t);
+  setTimeout(() => { if (t.parentNode) t.remove(); }, 90000);
+}
+function updateDirectToast(jobId, job) {
+  const t = document.getElementById(`dtоast-${jobId}`);
+  if (!t) return;
+  t.innerHTML = directToastHTML(jobId, job.event_url || '', job);
+}
+function directToastHTML(jobId, url, job) {
+  const hn       = tryHostname(url);
+  const status   = job.status || 'running';
+  const saved    = job.saved  || 0;
+  const found    = job.found  || 0;
+  const enriched = job.companies_enriched || 0;
+  const warn     = job.warning || '';
+  const icon     = status === 'done' ? '✅' : status === 'error' ? '❌' : status === 'enriching' ? '🤖' : '🔍';
+  const label    = status === 'done'      ? `Done — ${found} scraped, ${enriched} enriched by AI`
+                 : status === 'enriching' ? `Scraped ${found} — AI enriching now…`
+                 : status === 'error'     ? `Error: ${job.error || 'unknown'}`
+                 : `Scraping with Playwright…`;
+  const barCls   = status === 'done' ? 'bar-done' : status === 'error' ? 'bar-error' : 'bar-running';
+  const barWidth = status === 'running' ? '30%' : status === 'enriching' ? '70%' : '100%';
+  return `
+    <div class="toast-header">
+      <span class="toast-title">${icon} Scrape + Enrich</span>
+      <button class="toast-close" onclick="this.closest('.toast').remove()">✕</button>
+    </div>
+    <div class="toast-url">${esc(hn)}</div>
+    <div class="toast-status" style="color:${status==='done'?'var(--cyan)':status==='error'?'var(--red)':'var(--t2)'}">${label}</div>
+    ${warn ? `<div style="font-size:.7rem;color:var(--amber);margin-top:.2rem">${esc(warn)}</div>` : ''}
+    <div class="toast-bar-wrap"><div class="toast-bar ${barCls}" style="width:${barWidth}"></div></div>
+  `;
+}
+
+// ── AI Scrape trigger (Claude agent) ──────────────────────────────────────
+async function startScrape() {
+  const url = document.getElementById('nav-url').value.trim();
+  if (!url) return;
+
+  const btn = document.getElementById('scrape-btn');
+  btn.disabled = true; btn.textContent = '⏳ Starting…';
+
+  try {
+    const res  = await fetch('/api/run-agent', {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ event_url: url }),
+    });
+    const data = await res.json();
+    if (data.error) throw new Error(data.error);
     document.getElementById('nav-url').value = '';
     showToast(data.job_id, url);
     pollJob(data.job_id, url);
     updateJobsBadge();
     if (jobsPanelOpen) renderJobsPanel();
-
   } catch (err) {
-    alert('Failed to start agent: ' + err.message);
+    alert('Failed to start AI agent: ' + err.message);
   } finally {
-    btn.disabled = false;
-    btn.textContent = '▶ Scrape';
+    btn.disabled = false; btn.textContent = '🤖 AI Scrape';
   }
 }
 
@@ -453,18 +872,15 @@ function pollJob(jobId, eventUrl) {
   activeJobs[jobId] = setInterval(async () => {
     try {
       const res = await fetch(`/api/job-status/${jobId}`);
-      const job  = await res.json();
+      const job = await res.json();
       updateToast(jobId, job);
       if (jobsPanelOpen) renderJobsPanel();
-
       if (job.status === 'done' || job.status === 'error') {
         clearInterval(activeJobs[jobId]);
         delete activeJobs[jobId];
         updateJobsBadge();
-        // Refresh table & filters after scrape completes
-        if (job.status === 'done') {
-          await Promise.all([loadFilters(), loadCompanies()]);
-        }
+        if (job.status === 'done') await Promise.all([loadFilters(), loadCompanies()]);
+        if (job.status === 'error') maybShowCreditBanner(job.error);
       }
     } catch (_) {}
   }, 4000);
@@ -474,53 +890,62 @@ function pollJob(jobId, eventUrl) {
 function showToast(jobId, url) {
   const tc = document.getElementById('toast-container');
   const t  = document.createElement('div');
-  t.className = 'toast';
-  t.id = `toast-${jobId}`;
+  t.className = 'toast'; t.id = `toast-${jobId}`;
   t.innerHTML = toastHTML(jobId, url, {status:'running', companies_saved:0});
   tc.appendChild(t);
-  // auto-remove after 60s if done
   setTimeout(() => { if (t.parentNode) t.remove(); }, 60000);
 }
-
+function showToastSimple(msg, status) {
+  const id = 'pl-' + Date.now();
+  const tc = document.getElementById('toast-container');
+  const t  = document.createElement('div');
+  t.className = 'toast'; t.id = id;
+  const icon = status === 'done' ? '✅' : status === 'error' ? '❌' : '⚙️';
+  t.innerHTML = `
+    <div class="toast-header">
+      <span class="toast-title">${icon} Pipeline</span>
+      <button class="toast-close" onclick="this.closest('.toast').remove()">✕</button>
+    </div>
+    <div class="toast-status">${esc(msg)}</div>
+    <div class="toast-bar-wrap"><div class="toast-bar ${status==='done'?'bar-done':status==='error'?'bar-error':'bar-running'}" style="width:${status==='running'?'60%':'100%'}"></div></div>
+  `;
+  tc.appendChild(t);
+  if (status !== 'running') setTimeout(() => { if (t.parentNode) t.remove(); }, 8000);
+}
 function updateToast(jobId, job) {
   const t = document.getElementById(`toast-${jobId}`);
   if (!t) return;
   t.innerHTML = toastHTML(jobId, job.event_url, job);
 }
-
 function removeToast(jobId) {
   const t = document.getElementById(`toast-${jobId}`);
   if (t) t.remove();
 }
-
 function toastHTML(jobId, url, job) {
-  const hostname = (() => { try { return new URL(url).hostname; } catch { return url; } })();
+  const hostname = tryHostname(url);
   const saved    = job.companies_saved ?? 0;
   const status   = job.status ?? 'running';
   const barClass = status === 'done' ? 'bar-done' : status === 'error' ? 'bar-error' : 'bar-running';
-  const label    = status === 'done'    ? `Done — ${saved} companies saved`
-                 : status === 'error'   ? `Error: ${job.error ?? 'unknown'}`
+  const label    = status === 'done'  ? `Done — ${saved} companies saved`
+                 : status === 'error' ? `Error: ${job.error ?? 'unknown'}`
                  : `Running… ${saved} saved so far`;
-  const barW     = status === 'running' ? '60%' : '100%';
   return `
     <div class="toast-header">
-      <span class="toast-title">${status === 'done' ? '✅' : status === 'error' ? '❌' : '⚙️'} Agent Job</span>
+      <span class="toast-title">${status==='done'?'✅':status==='error'?'❌':'⚙️'} Agent Job</span>
       <button class="toast-close" onclick="removeToast('${jobId}')">✕</button>
     </div>
     <div class="toast-url">${esc(hostname)}</div>
     <div class="toast-status" style="color:${status==='done'?'var(--green)':status==='error'?'var(--red)':'var(--t2)'}">${label}</div>
-    <div class="toast-bar-wrap"><div class="toast-bar ${barClass}" style="width:${barW}"></div></div>
+    <div class="toast-bar-wrap"><div class="toast-bar ${barClass}" style="width:${status==='running'?'60%':'100%'}"></div></div>
   `;
 }
 
 // ── Jobs panel ─────────────────────────────────────────────────────────────
 function toggleJobsPanel() {
   jobsPanelOpen = !jobsPanelOpen;
-  const panel = document.getElementById('jobs-panel');
-  panel.style.display = jobsPanelOpen ? 'block' : 'none';
+  document.getElementById('jobs-panel').style.display = jobsPanelOpen ? 'block' : 'none';
   if (jobsPanelOpen) renderJobsPanel();
 }
-
 async function renderJobsPanel() {
   try {
     const res  = await fetch('/api/jobs');
@@ -530,64 +955,62 @@ async function renderJobsPanel() {
     list.innerHTML = jobs.map(j => {
       const dotClass = j.status === 'done' ? 'dot-done' : j.status === 'error' ? 'dot-error' : 'dot-running';
       const stat     = j.status === 'done'  ? `${j.companies_saved ?? 0} companies`
-                     : j.status === 'error' ? 'Error'
-                     : 'Running…';
-      const hostname = (() => { try { return new URL(j.event_url).hostname; } catch { return j.event_url; } })();
+                     : j.status === 'error' ? 'Error' : 'Running…';
       return `<div class="job-row">
         <span class="job-dot ${dotClass}"></span>
-        <span class="job-url" title="${esc(j.event_url)}">${esc(hostname)}</span>
+        <span class="job-url" title="${esc(j.event_url)}">${esc(tryHostname(j.event_url))}</span>
         <span class="job-stat">${stat}</span>
       </div>`;
     }).join('');
   } catch (_) {}
 }
-
 function updateJobsBadge() {
   const count = Object.keys(activeJobs).length;
   const badge = document.getElementById('jobs-badge');
-  if (count > 0) {
-    badge.textContent = count;
-    badge.style.display = 'flex';
-  } else {
-    badge.style.display = 'none';
-  }
+  badge.textContent = count;
+  badge.style.display = count > 0 ? 'flex' : 'none';
 }
 
-// ── Filters ────────────────────────────────────────────────────────────────
+// ── Filters ─────────────────────────────────────────────────────────────────
 async function loadFilters() {
   try {
     const res  = await fetch('/api/filters');
     const data = await res.json();
-    populate('f-event',   data.event_url   || [], v => { try { return new URL(v).hostname; } catch { return v; } });
-    populate('f-country', data.hq_country  || []);
-    populate('f-industry',data.industry    || []);
+    // Event dropdown — use event_name as label
+    const eventSel = document.getElementById('f-event');
+    while (eventSel.options.length > 1) eventSel.remove(1);
+    (data.events || []).filter(e => e.event_url).forEach(e => {
+      const o = document.createElement('option');
+      o.value = e.event_url;
+      o.textContent = e.event_name || tryHostname(e.event_url);
+      eventSel.appendChild(o);
+    });
+    populate('f-country',  data.hq_country || []);
+    populate('f-industry', data.industry   || []);
   } catch (e) { console.error(e); }
 }
-
 function populate(id, values, labelFn = v => v) {
   const sel = document.getElementById(id);
-  // Remove old dynamic options
   while (sel.options.length > 1) sel.remove(1);
   values.filter(Boolean).forEach(v => {
     const o = document.createElement('option');
     o.value = v; o.textContent = labelFn(v); sel.appendChild(o);
   });
 }
-
 function applyFilters() {
   const score = document.getElementById('f-score').value;
   loadCompanies({
     event_url:       document.getElementById('f-event').value,
     company_type:    document.getElementById('f-type').value,
     headcount_range: document.getElementById('f-headcount').value,
+    revenue_range:   document.getElementById('f-revenue').value,
     hq_country:      document.getElementById('f-country').value,
     industry:        document.getElementById('f-industry').value,
     min_icp_score:   score > 1 ? score : '',
   });
 }
-
 function resetFilters() {
-  ['f-event','f-type','f-headcount','f-country','f-industry'].forEach(id =>
+  ['f-event','f-type','f-headcount','f-revenue','f-country','f-industry'].forEach(id =>
     document.getElementById(id).value = ''
   );
   const s = document.getElementById('f-score');
@@ -596,36 +1019,137 @@ function resetFilters() {
   loadCompanies();
 }
 
-// ── Data ───────────────────────────────────────────────────────────────────
+// ── Data ─────────────────────────────────────────────────────────────────────
 async function loadCompanies(params = {}) {
   const qs = new URLSearchParams(
     Object.fromEntries(Object.entries(params).filter(([,v]) => v))
   ).toString();
-  document.getElementById('tbl-body').innerHTML =
-    '<div class="state-box"><div class="spinner"></div>Loading…</div>';
+  setLoadingState();
   try {
     const res  = await fetch('/api/companies' + (qs ? '?' + qs : ''));
-    const rows = await res.json();
-    renderTable(rows);
-    updateStats(rows);
+    const data = await res.json();
+    if (!Array.isArray(data)) {
+      const msg = data.error || 'Unexpected response from server';
+      document.getElementById('tbl-body').innerHTML =
+        `<div class="state-box"><div class="state-icon">⚠️</div>${esc(msg)}</div>`;
+      document.getElementById('view-cards').innerHTML =
+        `<div class="state-box"><div class="state-icon">⚠️</div>${esc(msg)}</div>`;
+      return;
+    }
+    allRows = data;
+    renderView();
+    updateStats(data);
+    renderCharts(data);
   } catch (e) {
     document.getElementById('tbl-body').innerHTML =
       `<div class="state-box"><div class="state-icon">⚠️</div>Error: ${e.message}</div>`;
+    document.getElementById('view-cards').innerHTML =
+      `<div class="state-box"><div class="state-icon">⚠️</div>Error: ${e.message}</div>`;
   }
 }
-
-// ── Stats ──────────────────────────────────────────────────────────────────
-function updateStats(rows) {
-  document.getElementById('s-total').textContent    = rows.length;
-  document.getElementById('s-high').textContent     = rows.filter(r => r.icp_score >= 8).length;
-  document.getElementById('s-mid').textContent      = rows.filter(r => r.icp_score >= 5 && r.icp_score < 8).length;
-  document.getElementById('s-events').textContent   = new Set(rows.map(r => r.event_url)).size;
-  document.getElementById('s-countries').textContent= new Set(rows.map(r => r.hq_country).filter(Boolean)).size;
-  document.getElementById('res-count').textContent  =
-    `${rows.length} result${rows.length !== 1 ? 's' : ''}`;
+function setLoadingState() {
+  document.getElementById('tbl-body').innerHTML   = '<div class="state-box"><div class="spinner"></div>Loading…</div>';
+  document.getElementById('view-cards').innerHTML = '<div class="state-box"><div class="spinner"></div>Loading…</div>';
 }
 
-// ── Table render ───────────────────────────────────────────────────────────
+// ── View toggle ───────────────────────────────────────────────────────────────
+function setView(v) {
+  currentView = v;
+  document.getElementById('vbtn-table').classList.toggle('active', v === 'table');
+  document.getElementById('vbtn-cards').classList.toggle('active', v === 'cards');
+  document.getElementById('view-table').style.display = v === 'table' ? '' : 'none';
+  document.getElementById('view-cards').style.display = v === 'cards' ? 'grid' : 'none';
+}
+function renderView() {
+  renderTable(allRows);
+  renderCards(allRows);
+}
+
+// ── Stats ─────────────────────────────────────────────────────────────────────
+function updateStats(rows) {
+  document.getElementById('s-total').textContent     = rows.length;
+  document.getElementById('s-high').textContent      = rows.filter(r => r.icp_score >= 8).length;
+  document.getElementById('s-mid').textContent       = rows.filter(r => r.icp_score >= 5 && r.icp_score < 8).length;
+  document.getElementById('s-events').textContent    = new Set(rows.map(r => r.event_url)).size;
+  document.getElementById('s-countries').textContent = new Set(rows.map(r => r.hq_country).filter(Boolean)).size;
+  document.getElementById('s-industries').textContent= new Set(rows.map(r => r.industry).filter(Boolean)).size;
+  document.getElementById('res-count').textContent   = `${rows.length} result${rows.length !== 1 ? 's' : ''}`;
+}
+
+// ── Charts ─────────────────────────────────────────────────────────────────
+function renderCharts(rows) {
+  if (!rows.length) { document.getElementById('charts-row').style.display = 'none'; return; }
+  document.getElementById('charts-row').style.display = 'grid';
+
+  renderBarChart('chart-country',  topN(rows, r => r.hq_country,  10), 'Companies');
+  renderBarChart('chart-industry', topN(rows, r => r.industry,    10), 'Companies');
+  renderIcpChart('chart-icp', rows);
+}
+
+function topN(rows, keyFn, n) {
+  const counts = {};
+  rows.forEach(r => { const k = keyFn(r); if (k) counts[k] = (counts[k]||0) + 1; });
+  return Object.entries(counts)
+    .sort((a,b) => b[1] - a[1])
+    .slice(0, n)
+    .reduce((acc,[k,v]) => { acc.labels.push(k); acc.data.push(v); return acc; }, {labels:[], data:[]});
+}
+
+function renderBarChart(canvasId, {labels, data}, dataLabel) {
+  const ctx = document.getElementById(canvasId);
+  if (!ctx) return;
+  if (charts[canvasId]) { charts[canvasId].destroy(); }
+  charts[canvasId] = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [{ label: dataLabel, data, backgroundColor: CHART_COLORS, borderRadius: 6 }],
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      scales: {
+        x: { ticks: { color: '#94a3b8', font: { size: 10 }, maxRotation: 35 }, grid: { color: 'rgba(255,255,255,.06)' } },
+        y: { ticks: { color: '#94a3b8', font: { size: 10 } }, grid: { color: 'rgba(255,255,255,.06)' } },
+      },
+    },
+  });
+}
+
+function renderIcpChart(canvasId, rows) {
+  const ctx = document.getElementById(canvasId);
+  if (!ctx) return;
+  if (charts[canvasId]) { charts[canvasId].destroy(); }
+  // Buckets: 1-3, 4-6, 7-8, 9-10
+  const buckets = { '1–3': 0, '4–6': 0, '7–8': 0, '9–10': 0 };
+  rows.forEach(r => {
+    const s = r.icp_score;
+    if (s <= 3) buckets['1–3']++;
+    else if (s <= 6) buckets['4–6']++;
+    else if (s <= 8) buckets['7–8']++;
+    else buckets['9–10']++;
+  });
+  charts[canvasId] = new Chart(ctx, {
+    type: 'doughnut',
+    data: {
+      labels: Object.keys(buckets),
+      datasets: [{
+        data: Object.values(buckets),
+        backgroundColor: ['#ef4444', '#f59e0b', '#3b82f6', '#10b981'],
+        borderWidth: 0, hoverOffset: 4,
+      }],
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: {
+        legend: { position: 'right', labels: { color: '#94a3b8', font: { size: 11 }, padding: 10 } },
+      },
+      cutout: '62%',
+    },
+  });
+}
+
+// ── Table render ──────────────────────────────────────────────────────────────
 function scoreClass(s) { return s >= 8 ? 'sh' : s >= 5 ? 'sm' : 'sl'; }
 
 function renderTable(rows) {
@@ -634,14 +1158,14 @@ function renderTable(rows) {
       '<div class="state-box"><div class="state-icon">🔍</div>No companies match the current filters.</div>';
     return;
   }
-  const trs = rows.map(r => `
-    <tr>
+  const trs = rows.map((r, i) => `
+    <tr onclick="openModal(${i})">
       <td>
         ${r.website_url
-          ? `<a class="co-name" href="${r.website_url}" target="_blank" rel="noopener">${esc(r.company_name)}</a>`
+          ? `<a class="co-name" href="${r.website_url}" target="_blank" rel="noopener" onclick="event.stopPropagation()">${esc(r.company_name)}</a>`
           : `<span class="co-name">${esc(r.company_name)}</span>`}
         ${r.website_url
-          ? `<br><a class="co-website" href="${r.website_url}" target="_blank" rel="noopener">${esc(r.website_url)}</a>`
+          ? `<br><a class="co-website" href="${r.website_url}" target="_blank" rel="noopener" onclick="event.stopPropagation()">${esc(r.website_url)}</a>`
           : ''}
       </td>
       <td><span class="badge b-${r.company_type || 'sponsor'}">${esc(r.company_type || '—')}</span></td>
@@ -650,10 +1174,10 @@ function renderTable(rows) {
       <td><span class="meta">${esc(r.industry || '—')}</span></td>
       <td><span class="meta">${esc(r.headcount_range || '—')}</span></td>
       <td><span class="meta">${esc(r.revenue_range || '—')}</span></td>
-      <td><span class="meta">${esc(r.hq_country || '—')}</span></td>
+      <td><span class="meta">${esc(r.hq_country || '—')}${r.hq_city ? ', ' + esc(r.hq_city) : ''}</span></td>
       <td>
-        <a class="ev-link" href="${r.event_url}" target="_blank" rel="noopener">
-          ${esc((() => { try { return new URL(r.event_url).hostname; } catch { return r.event_url; } })())}
+        <a class="ev-link" href="${r.event_url}" target="_blank" rel="noopener" onclick="event.stopPropagation()">
+          ${esc(tryHostname(r.event_url))}
         </a>
         ${r.event_name ? `<br><span style="font-size:.7rem;color:var(--t3)">${esc(r.event_name)}</span>` : ''}
       </td>
@@ -664,22 +1188,98 @@ function renderTable(rows) {
     <table>
       <thead>
         <tr>
-          <th>Company</th>
-          <th>Type</th>
-          <th>ICP</th>
-          <th>ICP Notes</th>
-          <th>Industry</th>
-          <th>Headcount</th>
-          <th>Revenue</th>
-          <th>Country</th>
-          <th>Event</th>
+          <th>Company</th><th>Type</th><th>ICP</th><th>ICP Notes</th>
+          <th>Industry</th><th>Headcount</th><th>Revenue</th><th>Location</th><th>Event</th>
         </tr>
       </thead>
       <tbody>${trs}</tbody>
     </table>`;
 }
 
-// ── Utils ──────────────────────────────────────────────────────────────────
+// ── Cards render ──────────────────────────────────────────────────────────────
+function renderCards(rows) {
+  const grid = document.getElementById('view-cards');
+  if (!rows.length) {
+    grid.innerHTML = '<div class="state-box" style="grid-column:1/-1"><div class="state-icon">🔍</div>No companies match the current filters.</div>';
+    return;
+  }
+  grid.innerHTML = rows.map((r, i) => `
+    <div class="company-card" onclick="openModal(${i})">
+      <div class="card-header">
+        <div class="card-name">${esc(r.company_name)}</div>
+        <span class="score-pill ${scoreClass(r.icp_score)}">${r.icp_score}</span>
+      </div>
+      <div class="card-body">
+        <div class="card-row">
+          <span class="card-icon">🏷</span>
+          <span class="badge b-${r.company_type || 'sponsor'}">${esc(r.company_type || '—')}</span>
+        </div>
+        ${r.industry ? `<div class="card-row"><span class="card-icon">⚡</span><span class="card-meta">${esc(r.industry)}</span></div>` : ''}
+        ${(r.hq_country || r.hq_city) ? `<div class="card-row"><span class="card-icon">📍</span><span class="card-meta">${esc([r.hq_city, r.hq_country].filter(Boolean).join(', '))}</span></div>` : ''}
+        ${r.headcount_range ? `<div class="card-row"><span class="card-icon">👥</span><span class="card-meta">${esc(r.headcount_range)} employees</span></div>` : ''}
+        ${r.revenue_range ? `<div class="card-row"><span class="card-icon">💰</span><span class="card-meta">${esc(r.revenue_range)} ARR</span></div>` : ''}
+        ${r.website_url ? `<div class="card-row"><span class="card-icon">🔗</span><a class="co-website" href="${r.website_url}" target="_blank" rel="noopener" onclick="event.stopPropagation()">${esc(tryHostname(r.website_url))}</a></div>` : ''}
+      </div>
+      ${r.icp_notes ? `<div class="card-notes">${esc(r.icp_notes)}</div>` : ''}
+    </div>
+  `).join('');
+}
+
+// ── Company modal ─────────────────────────────────────────────────────────────
+function openModal(idx) {
+  const r = allRows[idx];
+  if (!r) return;
+  const sc = scoreClass(r.icp_score);
+
+  document.getElementById('modal-body').innerHTML = `
+    <div class="modal-score-row">
+      <div class="modal-score-big ${sc}">${r.icp_score}</div>
+      <div>
+        <div class="modal-company-name">${esc(r.company_name)}</div>
+        <span class="badge b-${r.company_type || 'sponsor'}">${esc(r.company_type || '—')}</span>
+      </div>
+    </div>
+    ${r.website_url ? `<a class="modal-website" href="${r.website_url}" target="_blank" rel="noopener">&#127760; ${esc(r.website_url)}</a>` : ''}
+    <div class="modal-grid">
+      ${field('Industry',   r.industry)}
+      ${field('Headcount',  r.headcount_range)}
+      ${field('Revenue',    r.revenue_range)}
+      ${field('HQ Country', r.hq_country)}
+      ${field('HQ City',    r.hq_city)}
+      ${field('Added',      r.date_added)}
+    </div>
+    ${r.icp_notes ? `
+    <div class="modal-notes-block">
+      <div class="modal-notes-label">ICP Fit Notes</div>
+      <div class="modal-notes-text">${esc(r.icp_notes)}</div>
+    </div>` : ''}
+    <div class="modal-event-link">
+      Found at event:
+      <a href="${r.event_url}" target="_blank" rel="noopener">${esc(r.event_name || tryHostname(r.event_url))}</a>
+    </div>
+  `;
+  document.getElementById('modal-backdrop').classList.add('open');
+}
+
+function field(label, val) {
+  if (!val) return '';
+  return `<div>
+    <div class="modal-field-label">${label}</div>
+    <div class="modal-field-value">${esc(val)}</div>
+  </div>`;
+}
+
+function closeModal(e) {
+  if (!e || e.target === document.getElementById('modal-backdrop')) {
+    document.getElementById('modal-backdrop').classList.remove('open');
+  }
+}
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModal(); });
+
+// ── Utils ─────────────────────────────────────────────────────────────────────
+function tryHostname(url) {
+  try { return new URL(url).hostname; } catch { return url || ''; }
+}
 function esc(s) {
   if (!s) return '';
   return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');

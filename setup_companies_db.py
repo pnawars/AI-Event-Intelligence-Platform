@@ -53,6 +53,7 @@ CREATE TABLE IF NOT EXISTS event_companies (
     revenue_range    VARCHAR(50)      DEFAULT NULL
                        COMMENT '<$1M | $1M-$10M | $10M-$50M | $50M-$200M | $200M+',
     hq_country       VARCHAR(100)     DEFAULT NULL,
+    hq_city          VARCHAR(100)     DEFAULT NULL,
     industry         VARCHAR(200)     DEFAULT NULL,
     icp_score        TINYINT UNSIGNED NOT NULL
                        COMMENT '1-10; 10 = perfect ICP fit for TiDB/Db9.ai',
@@ -68,6 +69,8 @@ CREATE TABLE IF NOT EXISTS event_companies (
     INDEX idx_industry    (industry(100))
 ) ENGINE=InnoDB CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci
 """
+
+DDL_MIGRATE_HQ_CITY = "ALTER TABLE event_companies ADD COLUMN hq_city VARCHAR(100) DEFAULT NULL AFTER hq_country"
 
 
 def setup():
@@ -86,8 +89,18 @@ def setup():
             print("Switching to ai_events...")
             cur.execute("USE ai_events")
 
-            print("Creating event_companies table...")
+            print("Creating event_companies table (if not exists)...")
             cur.execute(DDL_CREATE_TABLE)
+
+            # Migration: add hq_city to existing tables that predate this column
+            try:
+                cur.execute(DDL_MIGRATE_HQ_CITY)
+                print("Added hq_city column.")
+            except Exception as e:
+                if "Duplicate column name" in str(e) or "hq_city" in str(e).lower():
+                    print("hq_city column already present — skipping migration.")
+                else:
+                    raise
 
             print("\nSchema verification:")
             cur.execute("SHOW COLUMNS FROM event_companies")

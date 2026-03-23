@@ -104,6 +104,10 @@ TOOLS = [
                     "type": "string",
                     "description": "Country where the company is headquartered.",
                 },
+                "hq_city": {
+                    "type": "string",
+                    "description": "City where the company is headquartered.",
+                },
                 "industry": {
                     "type": "string",
                     "description": (
@@ -147,6 +151,8 @@ TOOLS = [
 SYSTEM_PROMPT = """You are the Event Intelligence Agent for TiDB and Db9.ai.
 
 YOUR MISSION: Given an event URL, find every sponsor, speaker company, and exhibitor listed on that event's website. Enrich each company with firmographic data, then score them for ICP fit.
+
+CRITICAL OUTPUT RULE: After EVERY web_search result, IMMEDIATELY call save_company for each company you identified in that search. Do NOT write long paragraphs analysing companies before saving them. The pattern is: search → call save_company for each finding → search again. Tool calls first, prose last.
 
 COMPANY CONTEXT:
 - TiDB: distributed SQL / HTAP database for high-scale transactional + analytical workloads.
@@ -226,10 +232,28 @@ MAX_MESSAGES = 14           # Prune conversation window to control token usage
 
 
 def _prune_messages(messages: list) -> list:
-    """Keep first user message + last (MAX_MESSAGES - 1) messages."""
+    """
+    Keep the initial user message + the most recent (MAX_MESSAGES - 1) messages.
+    Never starts the tail with an orphaned tool_result block — that causes a
+    400 "unexpected tool_use_id" error.  Walk forward past any leading
+    tool_result user-messages whose parent tool_use was sliced away.
+    """
     if len(messages) <= MAX_MESSAGES:
         return messages
-    return [messages[0]] + messages[-(MAX_MESSAGES - 1):]
+
+    tail = messages[-(MAX_MESSAGES - 1):]
+
+    while tail and tail[0]["role"] == "user":
+        content = tail[0].get("content", "")
+        if isinstance(content, list) and any(
+            isinstance(b, dict) and b.get("type") == "tool_result"
+            for b in content
+        ):
+            tail = tail[1:]   # skip orphaned tool_results
+        else:
+            break             # plain text — safe
+
+    return [messages[0]] + tail
 
 
 def run_agent(event_url: str) -> dict:
@@ -246,9 +270,14 @@ def run_agent(event_url: str) -> dict:
             "role": "user",
             "content": (
                 f"Process this event: {event_url}\n\n"
-                "Find all sponsors, speakers, and exhibitors on the event page. "
-                "Enrich each company with firmographic data and score ICP fit. "
-                "Save every company you find to the database."
+                "Follow these steps in order:\n"
+                "1. Call get_existing_companies to see what is already saved.\n"
+                "2. Use web_search to find the event's sponsors page, speakers page, and exhibitors page.\n"
+                "3. For EACH company found, call save_company IMMEDIATELY — do not accumulate a list first.\n"
+                "4. Then web_search each company individually to enrich headcount, revenue, HQ, industry.\n"
+                "   If a company was already saved without enrichment, use save_company again (duplicates are ignored).\n"
+                "5. Keep searching until you have covered ALL sponsors, speakers, and exhibitors.\n\n"
+                "Save companies as you find them — never defer saves to the end of a response."
             ),
         }
     ]
@@ -268,13 +297,13 @@ def run_agent(event_url: str) -> dict:
         try:
             response = client.messages.create(
                 model="claude-sonnet-4-6",
-                max_tokens=8192,
+                max_tokens=16000,
                 system=system,
                 tools=TOOLS,
                 messages=messages,
             )
         except anthropic.RateLimitError as exc:
-            wait = min(120 * (2 ** min(iteration - 1, 3)), 960)
+            wait = min(60 * (2 ** min(iteration - 1, 2)), 120)
             logger.warning(
                 "Rate limit (iteration %d) — sleeping %ds. Error: %s",
                 iteration, wait, exc,
@@ -358,4 +387,161 @@ def run_agent(event_url: str) -> dict:
         "companies_saved": companies_saved,
     }
     logger.info("Run complete: %s", stats)
+    return stats
+
+
+# ---------------------------------------------------------------------------
+# Enrichment-only agent (runs after direct scrape)
+# ---------------------------------------------------------------------------
+
+ENRICH_SYSTEM = """You are a company research analyst for TiDB and Db9.ai.
+
+You will be given a list of company names found at a tech event.
+For EACH company, do the following:
+1. Use web_search to find: official website, employee headcount, annual revenue, HQ country & city, industry.
+2. Score the company 1-10 as a potential TiDB / Db9.ai buyer (ICP fit).
+3. IMMEDIATELY call save_company with the enriched data — do not batch saves.
+
+ICP SCORING (1-10):
+9-10: Builds AI agents, LLM apps, RAG systems, or AI infrastructure. Needs scalable DB/memory.
+7-8:  Builds AI/data products. Likely needs TiDB/Db9.ai at scale.
+5-6:  General SaaS or cloud — possible with nurture.
+3-4:  Traditional tech without clear AI/data signals.
+1-2:  Non-tech, consumer hardware, academia — poor fit.
+
+POSITIVE SIGNALS: AI agents, LLM, RAG, MLOps, vector DBs, FinTech AI, HealthTech AI, Developer Tools.
+NEGATIVE SIGNALS: Pure B2C consumer, hardware-only, traditional enterprise IT, non-technical events.
+
+DATA RULES:
+- headcount_range: one of: 1-10, 11-50, 51-200, 201-1000, 1001-5000, 5000+
+- revenue_range: one of: <$1M, $1M-$10M, $10M-$50M, $50M-$200M, $200M+
+- company_type: sponsor / speaker / exhibitor
+- If a field is genuinely unknown after searching, omit it (do NOT guess).
+- icp_notes: 1-2 sentences explaining the score and fit rationale.
+
+CRITICAL: Call save_company immediately after each search — never defer.
+Today: {today_date}
+Event URL: {event_url}"""
+
+
+def run_enrichment(event_url: str) -> dict:
+    """
+    Enrich companies that were auto-scraped but lack firmographic data.
+    Returns stats: {iterations, stop_reason, companies_enriched}.
+    """
+    companies = db_companies.get_unenriched_companies(event_url)
+    if not companies:
+        logger.info("No unenriched companies for %s", event_url)
+        return {"iterations": 0, "stop_reason": "nothing_to_enrich", "companies_enriched": 0}
+
+    logger.info("Enriching %d companies for %s", len(companies), event_url)
+
+    client = anthropic.Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
+    today = date.today().isoformat()
+    system = ENRICH_SYSTEM.format(today_date=today, event_url=event_url)
+
+    name_list = "\n".join(
+        f"- {c['company_name']} (type: {c['company_type']})"
+        for c in companies
+    )
+
+    messages = [
+        {
+            "role": "user",
+            "content": (
+                f"Enrich these {len(companies)} companies from {event_url}.\n\n"
+                f"{name_list}\n\n"
+                "For each company:\n"
+                "1. web_search to find their website, headcount, revenue, HQ, industry.\n"
+                "2. Score ICP fit 1-10 for TiDB/Db9.ai.\n"
+                "3. Call save_company IMMEDIATELY with all enriched data.\n\n"
+                "Process every company — do not skip any."
+            ),
+        }
+    ]
+
+    # Use a shorter loop — enrichment only, no discovery phase
+    max_iter = min(len(companies) * 3 + 10, 60)
+    companies_enriched = 0
+    stop_reason = "unknown"
+    iteration = 1
+
+    for iteration in range(1, max_iter + 1):
+        logger.info("Enrich iteration %d | context messages: %d", iteration, len(messages))
+        messages = _prune_messages(messages)
+
+        try:
+            response = client.messages.create(
+                model="claude-sonnet-4-6",
+                max_tokens=16000,
+                system=system,
+                tools=TOOLS,
+                messages=messages,
+            )
+        except anthropic.RateLimitError as exc:
+            wait = min(60 * (2 ** min(iteration - 1, 2)), 120)
+            logger.warning("Rate limit (enrich iter %d) — sleeping %ds", iteration, wait)
+            time.sleep(wait)
+            continue
+        except anthropic.BadRequestError as exc:
+            logger.error("Bad request (enrichment): %s", exc)
+            stop_reason = "bad_request"
+            break
+
+        messages.append({"role": "assistant", "content": response.content})
+        stop_reason = response.stop_reason
+
+        if stop_reason == "end_turn":
+            logger.info("Enrichment finished (end_turn) after %d iterations", iteration)
+            break
+
+        if stop_reason == "tool_use":
+            tool_results = []
+            for block in response.content:
+                if block.type != "tool_use":
+                    continue
+                if block.name == "web_search":
+                    continue
+
+                logger.info("Enrich tool: %s | %s", block.name, json.dumps(block.input)[:140])
+                result_str = _dispatch_tool(block.name, block.input)
+
+                if block.name == "save_company":
+                    try:
+                        parsed = json.loads(result_str)
+                        if parsed.get("success"):
+                            companies_enriched += 1
+                    except Exception:
+                        pass
+
+                tool_results.append({
+                    "type": "tool_result",
+                    "tool_use_id": block.id,
+                    "content": result_str,
+                })
+
+            if tool_results:
+                messages.append({"role": "user", "content": tool_results})
+
+        elif stop_reason == "max_tokens":
+            logger.warning("max_tokens hit (enrich iter %d) — continuing", iteration)
+            messages.append({
+                "role": "user",
+                "content": "Continue enriching the remaining companies.",
+            })
+        else:
+            logger.warning("Unexpected stop_reason in enrichment: %s", stop_reason)
+            break
+
+        time.sleep(INTER_ITER_DELAY)
+
+    else:
+        stop_reason = "max_iterations"
+
+    stats = {
+        "iterations": iteration,
+        "stop_reason": stop_reason,
+        "companies_enriched": companies_enriched,
+    }
+    logger.info("Enrichment complete: %s", stats)
     return stats

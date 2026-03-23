@@ -41,52 +41,95 @@ def _get_connection() -> pymysql.connections.Connection:
 
 def save_company(data: dict) -> dict:
     """
-    Insert a company discovered at an event.
-    Uses INSERT IGNORE so duplicate (event_url, company_name) pairs are silently skipped.
+    Insert or update a company discovered at an event.
+    On duplicate (event_url, company_name), enrichment fields are updated only when
+    the incoming value is non-NULL — so a later Claude enrichment pass always
+    upgrades the basic auto-scraped record without losing existing good data.
     Returns {"success": bool, "id": int|None, "message": str}
     """
     conn = _get_connection()
     try:
         with conn.cursor() as cur:
             sql = """
-                INSERT IGNORE INTO event_companies (
+                INSERT INTO event_companies (
                     event_url, event_name, company_name, company_type,
                     website_url, headcount_range, revenue_range,
-                    hq_country, industry, icp_score, icp_notes, date_added
+                    hq_country, hq_city, industry, icp_score, icp_notes, date_added
                 ) VALUES (
                     %s, %s, %s, %s,
                     %s, %s, %s,
-                    %s, %s, %s, %s, %s
+                    %s, %s, %s, %s, %s, %s
                 )
+                ON DUPLICATE KEY UPDATE
+                    event_name      = COALESCE(VALUES(event_name),      event_name),
+                    company_type    = COALESCE(VALUES(company_type),    company_type),
+                    website_url     = COALESCE(VALUES(website_url),     website_url),
+                    headcount_range = COALESCE(VALUES(headcount_range), headcount_range),
+                    revenue_range   = COALESCE(VALUES(revenue_range),   revenue_range),
+                    hq_country      = COALESCE(VALUES(hq_country),      hq_country),
+                    hq_city         = COALESCE(VALUES(hq_city),         hq_city),
+                    industry        = COALESCE(VALUES(industry),        industry),
+                    icp_score       = COALESCE(VALUES(icp_score),       icp_score),
+                    icp_notes       = COALESCE(VALUES(icp_notes),       icp_notes)
             """
             cur.execute(sql, (
                 data.get("event_url"),
                 data.get("event_name"),
                 data.get("company_name"),
                 data.get("company_type", "sponsor"),
-                data.get("website_url"),
-                data.get("headcount_range"),
-                data.get("revenue_range"),
-                data.get("hq_country"),
-                data.get("industry"),
-                int(data.get("icp_score", 5)),
-                data.get("icp_notes"),
+                data.get("website_url") or None,
+                data.get("headcount_range") or None,
+                data.get("revenue_range") or None,
+                data.get("hq_country") or None,
+                data.get("hq_city") or None,
+                data.get("industry") or None,
+                int(data.get("icp_score", 5)) if data.get("icp_score") else None,
+                data.get("icp_notes") or None,
                 date.today().isoformat(),
             ))
 
-            if cur.rowcount == 0:
-                return {"success": False, "id": None, "message": "duplicate — skipped"}
-
             new_id = cur.lastrowid
+            inserted = cur.rowcount == 1
             logger.info(
-                "Saved company id=%s name=%r score=%s",
+                "%s company id=%s name=%r score=%s",
+                "Saved" if inserted else "Updated",
                 new_id, data.get("company_name"), data.get("icp_score"),
             )
-            return {"success": True, "id": new_id, "message": "saved"}
+            return {"success": True, "id": new_id, "message": "saved" if inserted else "updated"}
 
     except Exception as exc:
         logger.error("save_company failed for %r: %s", data.get("company_name"), exc)
         return {"success": False, "id": None, "message": str(exc)}
+    finally:
+        conn.close()
+
+
+def get_unenriched_companies(event_url: str) -> list:
+    """
+    Return companies for this event that are missing enrichment data
+    (industry IS NULL or icp_notes contains 'Auto-scraped').
+    Used by the enrichment agent after a direct scrape.
+    """
+    conn = _get_connection()
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT id, company_name, company_type, icp_score
+                FROM event_companies
+                WHERE event_url = %s
+                  AND (industry IS NULL
+                       OR icp_notes IS NULL
+                       OR icp_notes LIKE '%Auto-scraped%')
+                ORDER BY company_name
+                """,
+                (event_url,),
+            )
+            rows = cur.fetchall()
+            for row in rows:
+                if isinstance(row.get("date_added"), (datetime, date)):
+                    row["date_added"] = row["date_added"].isoformat()
+            return rows
     finally:
         conn.close()
 
@@ -121,9 +164,12 @@ def get_all_companies(
     event_url: str = None,
     company_type: str = None,
     headcount_range: str = None,
+    revenue_range: str = None,
     hq_country: str = None,
+    hq_city: str = None,
     industry: str = None,
     min_icp_score: int = None,
+    max_icp_score: int = None,
 ) -> list:
     """
     Return event_companies rows with optional filters.
@@ -143,15 +189,24 @@ def get_all_companies(
         if headcount_range:
             conditions.append("headcount_range = %s")
             params.append(headcount_range)
+        if revenue_range:
+            conditions.append("revenue_range = %s")
+            params.append(revenue_range)
         if hq_country:
             conditions.append("hq_country = %s")
             params.append(hq_country)
+        if hq_city:
+            conditions.append("hq_city LIKE %s")
+            params.append(f"%{hq_city}%")
         if industry:
             conditions.append("industry LIKE %s")
             params.append(f"%{industry}%")
         if min_icp_score is not None:
             conditions.append("icp_score >= %s")
             params.append(min_icp_score)
+        if max_icp_score is not None:
+            conditions.append("icp_score <= %s")
+            params.append(max_icp_score)
 
         where = ("WHERE " + " AND ".join(conditions)) if conditions else ""
         sql = f"""
@@ -177,13 +232,30 @@ def get_filter_options() -> dict:
     try:
         with conn.cursor() as cur:
             options = {}
-            for col in ("event_url", "company_type", "headcount_range", "hq_country"):
+            for col in ("company_type", "headcount_range", "revenue_range", "hq_country", "hq_city"):
                 cur.execute(
                     f"SELECT DISTINCT {col} FROM event_companies WHERE {col} IS NOT NULL ORDER BY {col}"
                 )
                 options[col] = [r[col] for r in cur.fetchall()]
 
-            # Industries may be comma-separated — return distinct raw values for now
+            # Return {event_url, event_name} pairs for the event filter dropdown
+            cur.execute(
+                """
+                SELECT DISTINCT event_url,
+                       COALESCE(MAX(event_name), event_url) AS event_name
+                FROM event_companies
+                WHERE event_url IS NOT NULL
+                GROUP BY event_url
+                ORDER BY event_name
+                """
+            )
+            options["events"] = [
+                {"event_url": r["event_url"], "event_name": r["event_name"]}
+                for r in cur.fetchall()
+            ]
+            # Keep legacy event_url list for backwards compat
+            options["event_url"] = [e["event_url"] for e in options["events"]]
+
             cur.execute(
                 "SELECT DISTINCT industry FROM event_companies WHERE industry IS NOT NULL ORDER BY industry"
             )
