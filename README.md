@@ -1,4 +1,4 @@
-# AI Event Intelligence Platform — TiDB / Db9.ai
+# AI Event Intelligence Platform
 
 An agentic AI pipeline that automatically discovers tech events in EMEA, scrapes sponsor and speaker companies, enriches them with firmographic data, scores them for ICP fit, and surfaces everything in a live dashboard.
 
