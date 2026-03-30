@@ -1,0 +1,688 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Event Intelligence Dashboard</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:        #0f1117;
+      --surface:   #1a1d27;
+      --surface2:  #22263a;
+      --border:    #2e3350;
+      --text:      #e8eaf0;
+      --muted:     #8892b0;
+      --accent:    #7c6af7;
+      --accent2:   #2dd4bf;
+      --accent3:   #f97316;
+      --green:     #22c55e;
+      --red:       #ef4444;
+      --radius:    10px;
+      --font:      'Inter', system-ui, sans-serif;
+    }
+
+    body { background: var(--bg); color: var(--text); font-family: var(--font); font-size: 14px; min-height: 100vh; }
+
+    /* Layout */
+    .layout { display: grid; grid-template-columns: 220px 1fr; min-height: 100vh; }
+    .sidebar { background: var(--surface); border-right: 1px solid var(--border); padding: 24px 0; display: flex; flex-direction: column; position: sticky; top: 0; height: 100vh; overflow-y: auto; }
+    .main { padding: 28px; overflow-x: hidden; }
+
+    /* Sidebar */
+    .logo { padding: 0 20px 24px; border-bottom: 1px solid var(--border); }
+    .logo h1 { font-size: 15px; font-weight: 700; color: var(--text); letter-spacing: -0.3px; }
+    .logo p  { font-size: 11px; color: var(--muted); margin-top: 2px; }
+
+    .nav { padding: 16px 12px; flex: 1; }
+    .nav-item { display: flex; align-items: center; gap: 8px; padding: 9px 12px; border-radius: 7px; cursor: pointer; color: var(--muted); font-size: 13px; font-weight: 500; transition: all .15s; border: none; background: none; width: 100%; text-align: left; }
+    .nav-item:hover { background: var(--surface2); color: var(--text); }
+    .nav-item.active { background: rgba(124,106,247,.15); color: var(--accent); }
+    .nav-icon { font-size: 15px; width: 18px; }
+
+    .sidebar-footer { padding: 16px 20px; border-top: 1px solid var(--border); font-size: 11px; color: var(--muted); }
+    .status-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--green); display: inline-block; margin-right: 6px; animation: pulse 2s infinite; }
+    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.4} }
+
+    /* Sections */
+    .section { display: none; }
+    .section.active { display: block; }
+
+    /* Header */
+    .page-header { margin-bottom: 24px; }
+    .page-header h2 { font-size: 20px; font-weight: 700; letter-spacing: -0.4px; }
+    .page-header p  { color: var(--muted); font-size: 13px; margin-top: 3px; }
+
+    /* KPI Cards */
+    .kpi-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-bottom: 24px; }
+    .kpi { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 18px 20px; }
+    .kpi-label { font-size: 11px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .7px; }
+    .kpi-value { font-size: 28px; font-weight: 800; margin-top: 6px; letter-spacing: -1px; }
+    .kpi-sub   { font-size: 11px; color: var(--muted); margin-top: 4px; }
+    .kpi.purple .kpi-value { color: var(--accent); }
+    .kpi.teal   .kpi-value { color: var(--accent2); }
+    .kpi.orange .kpi-value { color: var(--accent3); }
+    .kpi.green  .kpi-value { color: var(--green); }
+
+    /* Charts */
+    .chart-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 14px; margin-bottom: 24px; }
+    .chart-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 18px 20px; }
+    .chart-card.wide { grid-column: span 2; }
+    .chart-title { font-size: 13px; font-weight: 600; margin-bottom: 14px; color: var(--text); }
+    .chart-wrap  { position: relative; height: 180px; }
+
+    /* Filters */
+    .filter-bar { display: flex; gap: 10px; margin-bottom: 16px; flex-wrap: wrap; align-items: center; }
+    .filter-bar input, .filter-bar select {
+      background: var(--surface); border: 1px solid var(--border);
+      color: var(--text); border-radius: 7px; padding: 8px 12px;
+      font-size: 13px; font-family: var(--font); outline: none;
+      transition: border-color .15s;
+    }
+    .filter-bar input { flex: 1; min-width: 180px; }
+    .filter-bar input:focus, .filter-bar select:focus { border-color: var(--accent); }
+    .filter-bar select option { background: var(--surface2); }
+
+    /* Table */
+    .table-wrap { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
+    table { width: 100%; border-collapse: collapse; }
+    thead { background: var(--surface2); }
+    th { padding: 11px 14px; text-align: left; font-size: 11px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .6px; white-space: nowrap; }
+    td { padding: 12px 14px; border-top: 1px solid var(--border); font-size: 13px; vertical-align: middle; }
+    tr:hover td { background: rgba(255,255,255,.02); }
+    .loading-row td { text-align: center; color: var(--muted); padding: 32px; }
+
+    /* Badges */
+    .badge { display: inline-flex; align-items: center; padding: 3px 9px; border-radius: 20px; font-size: 11px; font-weight: 600; white-space: nowrap; }
+    .badge-ai      { background: rgba(124,106,247,.15); color: #a89bf8; }
+    .badge-fintech { background: rgba(45,212,191,.12); color: var(--accent2); }
+    .badge-tech    { background: rgba(249,115,22,.12); color: var(--accent3); }
+    .badge-sponsor  { background: rgba(234,179,8,.12); color: #facc15; }
+    .badge-exhibitor{ background: rgba(59,130,246,.12); color: #60a5fa; }
+    .badge-speaker  { background: rgba(34,197,94,.12); color: var(--green); }
+    .badge-uk  { background: rgba(30,64,175,.2); color: #93c5fd; }
+    .badge-ie  { background: rgba(22,163,74,.2); color: #86efac; }
+
+    /* Pagination */
+    .pagination { display: flex; align-items: center; gap: 8px; margin-top: 14px; justify-content: flex-end; }
+    .page-btn { background: var(--surface); border: 1px solid var(--border); color: var(--text); border-radius: 6px; padding: 5px 11px; cursor: pointer; font-size: 12px; }
+    .page-btn:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); }
+    .page-btn:disabled { opacity: .4; cursor: default; }
+    .page-info { font-size: 12px; color: var(--muted); }
+
+    /* Event detail panel */
+    .detail-panel { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 24px; margin-bottom: 20px; display: none; }
+    .detail-panel.open { display: block; }
+    .detail-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 16px; }
+    .detail-header h3 { font-size: 17px; font-weight: 700; }
+    .close-btn { background: none; border: 1px solid var(--border); color: var(--muted); border-radius: 6px; padding: 4px 10px; cursor: pointer; font-size: 12px; }
+    .close-btn:hover { color: var(--text); }
+    .detail-meta { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 18px; }
+    .meta-pill { background: var(--surface2); border-radius: 20px; padding: 4px 12px; font-size: 12px; color: var(--muted); }
+    .meta-pill strong { color: var(--text); }
+
+    /* Config panel */
+    .config-section { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 24px; margin-bottom: 16px; }
+    .config-section h3 { font-size: 15px; font-weight: 600; margin-bottom: 16px; }
+    .config-row { display: grid; grid-template-columns: 1fr 2fr; gap: 12px; margin-bottom: 12px; align-items: center; }
+    .config-label { font-size: 13px; color: var(--muted); }
+    .config-input { background: var(--surface2); border: 1px solid var(--border); color: var(--text); border-radius: 7px; padding: 9px 12px; font-size: 13px; font-family: var(--font); width: 100%; }
+    .btn { padding: 9px 18px; border-radius: 7px; font-size: 13px; font-weight: 600; cursor: pointer; border: none; transition: all .15s; }
+    .btn-primary { background: var(--accent); color: #fff; }
+    .btn-primary:hover { background: #6b59e8; }
+    .btn-secondary { background: var(--surface2); color: var(--text); border: 1px solid var(--border); }
+    .btn-secondary:hover { border-color: var(--accent); color: var(--accent); }
+
+    .run-log { background: #0a0c13; border: 1px solid var(--border); border-radius: 7px; padding: 14px; font-family: monospace; font-size: 12px; color: var(--accent2); max-height: 220px; overflow-y: auto; white-space: pre-wrap; }
+
+    /* Empty state */
+    .empty { text-align: center; padding: 48px 20px; color: var(--muted); }
+    .empty-icon { font-size: 36px; margin-bottom: 10px; }
+    .empty p { font-size: 13px; }
+
+    /* Responsive */
+    @media (max-width: 900px) {
+      .layout { grid-template-columns: 1fr; }
+      .sidebar { position: relative; height: auto; }
+      .kpi-grid { grid-template-columns: 1fr 1fr; }
+      .chart-grid { grid-template-columns: 1fr; }
+      .chart-card.wide { grid-column: span 1; }
+    }
+  </style>
+</head>
+<body>
+<div class="layout">
+
+  <!-- Sidebar -->
+  <aside class="sidebar">
+    <div class="logo">
+      <h1>⚡ Event Intel</h1>
+      <p>UK &amp; Ireland · Auto-sourced</p>
+    </div>
+    <nav class="nav">
+      <button class="nav-item active" onclick="showSection('overview')" id="nav-overview">
+        <span class="nav-icon">📊</span> Overview
+      </button>
+      <button class="nav-item" onclick="showSection('events')" id="nav-events">
+        <span class="nav-icon">📅</span> Events
+      </button>
+      <button class="nav-item" onclick="showSection('companies')" id="nav-companies">
+        <span class="nav-icon">🏢</span> Companies
+      </button>
+      <button class="nav-item" onclick="showSection('config')" id="nav-config">
+        <span class="nav-icon">⚙️</span> Config &amp; Logs
+      </button>
+    </nav>
+    <div class="sidebar-footer">
+      <span class="status-dot"></span>
+      <span id="last-run-label">Loading...</span>
+    </div>
+  </aside>
+
+  <!-- Main -->
+  <main class="main">
+
+    <!-- OVERVIEW -->
+    <section class="section active" id="section-overview">
+      <div class="page-header">
+        <h2>Overview</h2>
+        <p>UK &amp; Ireland · Tech &amp; SaaS · Finance &amp; FinTech · AI</p>
+      </div>
+
+      <div class="kpi-grid">
+        <div class="kpi purple">
+          <div class="kpi-label">Upcoming Events</div>
+          <div class="kpi-value" id="kpi-events">—</div>
+          <div class="kpi-sub">next 6 months</div>
+        </div>
+        <div class="kpi teal">
+          <div class="kpi-label">Companies Tracked</div>
+          <div class="kpi-value" id="kpi-companies">—</div>
+          <div class="kpi-sub">sponsors, exhibitors, speakers</div>
+        </div>
+        <div class="kpi orange">
+          <div class="kpi-label">Relationships</div>
+          <div class="kpi-value" id="kpi-relations">—</div>
+          <div class="kpi-sub">company ↔ event links</div>
+        </div>
+        <div class="kpi green">
+          <div class="kpi-label">Next Event</div>
+          <div class="kpi-value" id="kpi-next-date" style="font-size:18px">—</div>
+          <div class="kpi-sub" id="kpi-next-name">—</div>
+        </div>
+      </div>
+
+      <div class="chart-grid">
+        <div class="chart-card wide">
+          <div class="chart-title">Events by month (next 12 months)</div>
+          <div class="chart-wrap"><canvas id="chartByMonth"></canvas></div>
+        </div>
+        <div class="chart-card">
+          <div class="chart-title">Events by industry</div>
+          <div class="chart-wrap"><canvas id="chartByIndustry"></canvas></div>
+        </div>
+        <div class="chart-card">
+          <div class="chart-title">Top cities</div>
+          <div class="chart-wrap"><canvas id="chartByCity"></canvas></div>
+        </div>
+        <div class="chart-card">
+          <div class="chart-title">Company roles</div>
+          <div class="chart-wrap"><canvas id="chartRoles"></canvas></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- EVENTS -->
+    <section class="section" id="section-events">
+      <div class="page-header">
+        <h2>Events</h2>
+        <p>All upcoming UK &amp; Ireland events in your target industries</p>
+      </div>
+
+      <!-- Detail panel -->
+      <div class="detail-panel" id="event-detail">
+        <div class="detail-header">
+          <h3 id="detail-name">—</h3>
+          <button class="close-btn" onclick="closeDetail()">✕ Close</button>
+        </div>
+        <div class="detail-meta" id="detail-meta"></div>
+        <div id="detail-companies-wrap">
+          <div class="chart-title" style="margin-bottom:10px">Companies at this event</div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Company</th><th>Role</th><th>Tier</th><th>Website</th><th>Size</th><th>Revenue</th>
+                </tr>
+              </thead>
+              <tbody id="detail-companies"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <div class="filter-bar">
+        <input type="text" id="event-search" placeholder="Search events…" oninput="debounceLoadEvents()">
+        <select id="event-industry" onchange="loadEvents(0)">
+          <option value="">All industries</option>
+          <option value="Tech & SaaS">Tech &amp; SaaS</option>
+          <option value="Finance & FinTech">Finance &amp; FinTech</option>
+          <option value="AI">AI</option>
+        </select>
+        <select id="event-country" onchange="loadEvents(0)">
+          <option value="">UK &amp; Ireland</option>
+          <option value="UK">UK only</option>
+          <option value="IE">Ireland only</option>
+        </select>
+        <select id="event-type" onchange="loadEvents(0)">
+          <option value="">All types</option>
+          <option>Conference</option><option>Summit</option>
+          <option>Expo</option><option>Meetup</option><option>Hackathon</option>
+        </select>
+      </div>
+
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Event</th><th>Date</th><th>Country</th><th>City</th><th>Industry</th>
+              <th>Type</th><th>Description</th><th>Companies</th><th>Attendees</th>
+            </tr>
+          </thead>
+          <tbody id="events-tbody">
+            <tr class="loading-row"><td colspan="9">Loading events…</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="pagination">
+        <button class="page-btn" id="ev-prev" onclick="loadEvents(evOffset - 50)" disabled>← Prev</button>
+        <span class="page-info" id="ev-page-info"></span>
+        <button class="page-btn" id="ev-next" onclick="loadEvents(evOffset + 50)">Next →</button>
+      </div>
+    </section>
+
+    <!-- COMPANIES -->
+    <section class="section" id="section-companies">
+      <div class="page-header">
+        <h2>Companies</h2>
+        <p>All companies found at tracked events</p>
+      </div>
+
+      <div class="filter-bar">
+        <input type="text" id="co-search" placeholder="Search companies…" oninput="debounceLoadCompanies()">
+        <select id="co-country" onchange="loadCompanies(0)">
+          <option value="">Any country</option>
+          <option value="UK">UK</option><option value="IE">Ireland</option>
+          <option value="US">US</option><option value="EU">EU</option>
+        </select>
+        <select id="co-revenue" onchange="loadCompanies(0)">
+          <option value="">Any revenue</option>
+          <option>$1M-$10M</option><option>$10M-$50M</option>
+          <option>$50M-$250M</option><option>$250M+</option>
+        </select>
+        <select id="co-size" onchange="loadCompanies(0)">
+          <option value="">Any size</option>
+          <option value="1-10">1–10</option><option value="11-50">11–50</option>
+          <option value="51-200">51–200</option><option value="201-1000">201–1000</option>
+          <option value="1001-5000">1001–5000</option><option value="5000+">5000+</option>
+        </select>
+      </div>
+
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Company</th><th>Industry</th><th>Location</th><th>Size</th>
+              <th>Revenue</th><th>Events</th><th>Roles</th><th>Links</th>
+            </tr>
+          </thead>
+          <tbody id="companies-tbody">
+            <tr class="loading-row"><td colspan="8">Loading companies…</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="pagination">
+        <button class="page-btn" id="co-prev" onclick="loadCompanies(coOffset - 50)" disabled>← Prev</button>
+        <span class="page-info" id="co-page-info"></span>
+        <button class="page-btn" id="co-next" onclick="loadCompanies(coOffset + 50)">Next →</button>
+      </div>
+    </section>
+
+    <!-- CONFIG -->
+    <section class="section" id="section-config">
+      <div class="page-header">
+        <h2>Config &amp; Logs</h2>
+        <p>Connect to your TiDB instance and monitor agent runs</p>
+      </div>
+
+      <div class="config-section">
+        <h3>🔌 API Connection</h3>
+        <p style="color:var(--muted);font-size:12px;margin-bottom:14px">
+          The dashboard reads from your local Express server (dashboard/server.js). Set the base URL below.
+        </p>
+        <div class="config-row">
+          <span class="config-label">API Base URL</span>
+          <input class="config-input" id="cfg-api-url" value="http://localhost:3001" placeholder="http://localhost:3001">
+        </div>
+        <div style="margin-top:12px;display:flex;gap:8px">
+          <button class="btn btn-primary" onclick="saveConfig()">Save &amp; Test Connection</button>
+          <button class="btn btn-secondary" onclick="loadAllData()">Reload Data</button>
+        </div>
+        <div id="conn-status" style="margin-top:10px;font-size:12px;color:var(--muted)"></div>
+      </div>
+
+      <div class="config-section">
+        <h3>🕐 Scheduler Info</h3>
+        <p style="color:var(--muted);font-size:13px;margin-bottom:6px">
+          The Node.js cron runs in <code style="background:var(--surface2);padding:2px 6px;border-radius:4px">scheduler/index.js</code>.
+          Default schedule: <strong>07:00 Europe/London, daily</strong>.
+        </p>
+        <p style="color:var(--muted);font-size:13px">
+          Change via <code style="background:var(--surface2);padding:2px 6px;border-radius:4px">CRON_SCHEDULE</code> in your <code style="background:var(--surface2);padding:2px 6px;border-radius:4px">.env</code> file.
+          Run immediately: <code style="background:var(--surface2);padding:2px 6px;border-radius:4px">npm run run-once</code>
+        </p>
+      </div>
+
+      <div class="config-section">
+        <h3>📋 Recent Agent Runs</h3>
+        <div class="run-log" id="run-log">Fetching run history…</div>
+        <button class="btn btn-secondary" style="margin-top:10px" onclick="loadRunLog()">Refresh logs</button>
+      </div>
+    </section>
+
+  </main>
+</div>
+
+<script>
+  let API = localStorage.getItem('event-intel-api') || '';
+  let evOffset = 0, coOffset = 0;
+  let evDebounce, coDebounce;
+  let charts = {};
+
+  // ── Navigation ────────────────────────────────────────────────────────────
+  function showSection(id) {
+    document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+    document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+    document.getElementById('section-' + id).classList.add('active');
+    document.getElementById('nav-' + id).classList.add('active');
+    if (id === 'events')    loadEvents(0);
+    if (id === 'companies') loadCompanies(0);
+    if (id === 'config')    loadRunLog();
+  }
+
+  // ── Fetch helper ──────────────────────────────────────────────────────────
+  async function apiFetch(path) {
+    const r = await fetch(API + path);
+    if (!r.ok) throw new Error(r.statusText);
+    return r.json();
+  }
+
+  // ── Load all data ─────────────────────────────────────────────────────────
+  async function loadAllData() {
+    loadStats();
+    loadCharts();
+  }
+
+  async function loadStats() {
+    try {
+      const d = await apiFetch('/api/stats');
+      document.getElementById('kpi-events').textContent     = d.total_events ?? '—';
+      document.getElementById('kpi-companies').textContent  = d.total_companies ?? '—';
+      document.getElementById('kpi-relations').textContent  = d.total_relations ?? '—';
+      if (d.nextEvent) {
+        document.getElementById('kpi-next-date').textContent = fmtDate(d.nextEvent.start_date);
+        document.getElementById('kpi-next-name').textContent = d.nextEvent.name;
+      }
+      document.getElementById('last-run-label').textContent = d.last_run
+        ? 'Last run: ' + fmtDate(d.last_run) : 'No runs yet';
+    } catch {
+      document.getElementById('kpi-events').textContent = '—';
+      document.getElementById('last-run-label').textContent = 'API offline';
+    }
+  }
+
+  async function loadCharts() {
+    try {
+      const [byMonth, byIndustry, byCity, byRole] = await Promise.all([
+        apiFetch('/api/charts/by-month'),
+        apiFetch('/api/charts/by-industry'),
+        apiFetch('/api/charts/by-city'),
+        apiFetch('/api/charts/company-roles'),
+      ]);
+      renderBarChart('chartByMonth',     byMonth,     'month',    'count', '#7c6af7');
+      renderDoughnut('chartByIndustry',  byIndustry,  'industry', 'count', ['#7c6af7','#2dd4bf','#f97316']);
+      renderBarChart('chartByCity',      byCity,      'city',     'count', '#2dd4bf', true);
+      renderDoughnut('chartRoles',       byRole,      'role',     'count', ['#facc15','#60a5fa','#22c55e','#f97316','#e879f9']);
+    } catch (e) {
+      console.warn('Charts not loaded — is the API server running?', e.message);
+    }
+  }
+
+  function renderBarChart(id, data, labelKey, valueKey, color, horizontal = false) {
+    if (charts[id]) charts[id].destroy();
+    const ctx = document.getElementById(id).getContext('2d');
+    charts[id] = new Chart(ctx, {
+      type: 'bar',
+      data: {
+        labels: data.map(d => d[labelKey]),
+        datasets: [{ data: data.map(d => d[valueKey]), backgroundColor: color + 'cc', borderRadius: 4 }],
+      },
+      options: {
+        indexAxis: horizontal ? 'y' : 'x',
+        responsive: true, maintainAspectRatio: false,
+        plugins: { legend: { display: false } },
+        scales: {
+          x: { grid: { color: '#2e3350' }, ticks: { color: '#8892b0', font: { size: 10 } } },
+          y: { grid: { color: '#2e3350' }, ticks: { color: '#8892b0', font: { size: 10 } } },
+        },
+      },
+    });
+  }
+
+  function renderDoughnut(id, data, labelKey, valueKey, colors) {
+    if (charts[id]) charts[id].destroy();
+    const ctx = document.getElementById(id).getContext('2d');
+    charts[id] = new Chart(ctx, {
+      type: 'doughnut',
+      data: {
+        labels: data.map(d => d[labelKey]),
+        datasets: [{ data: data.map(d => d[valueKey]), backgroundColor: colors, borderWidth: 0 }],
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        plugins: {
+          legend: { position: 'bottom', labels: { color: '#8892b0', font: { size: 10 }, boxWidth: 10, padding: 10 } },
+        },
+        cutout: '65%',
+      },
+    });
+  }
+
+  // ── Events table ──────────────────────────────────────────────────────────
+  async function loadEvents(offset = 0) {
+    evOffset = offset;
+    const search   = document.getElementById('event-search').value;
+    const industry = document.getElementById('event-industry').value;
+    const country  = document.getElementById('event-country').value;
+    const type     = document.getElementById('event-type').value;
+
+    const q = new URLSearchParams({ limit: 50, offset });
+    if (search)   q.set('search', search);
+    if (industry) q.set('industry', industry);
+    if (country)  q.set('country', country);
+    if (type)     q.set('event_type', type);
+
+    const tbody = document.getElementById('events-tbody');
+    tbody.innerHTML = '<tr class="loading-row"><td colspan="9">Loading…</td></tr>';
+
+    try {
+      const d = await apiFetch('/api/events?' + q);
+      if (!d.events.length) {
+        tbody.innerHTML = `<tr class="loading-row"><td colspan="9"><div class="empty"><div class="empty-icon">📭</div><p>No events found. Run the agent pipeline first.</p></div></td></tr>`;
+      } else {
+        tbody.innerHTML = d.events.map(ev => `
+          <tr style="cursor:pointer" onclick="openEventDetail('${ev.id}')">
+            <td>
+              <strong>${ev.name}</strong>
+              ${ev.url ? `<br><a href="${ev.url}" target="_blank" onclick="event.stopPropagation()" style="font-size:11px;color:var(--accent)">↗ Website</a>` : ''}
+            </td>
+            <td style="white-space:nowrap">${fmtDate(ev.start_date)}${ev.end_date !== ev.start_date ? '<br><span style="font-size:11px;color:var(--muted)">→ '+fmtDate(ev.end_date)+'</span>' : ''}</td>
+            <td><span class="badge ${ev.location_country === 'IE' ? 'badge-ie' : 'badge-uk'}">${ev.location_country || 'UK'}</span></td>
+            <td style="color:var(--muted)">${ev.location_city || '—'}</td>
+            <td><span class="badge ${industryBadge(ev.industry)}">${ev.industry || '—'}</span></td>
+            <td style="color:var(--muted)">${ev.event_type || '—'}</td>
+            <td style="font-size:12px;color:var(--muted);max-width:260px">${ev.description ? ev.description.slice(0,120) + (ev.description.length > 120 ? '…' : '') : '—'}</td>
+            <td style="font-weight:700;color:var(--accent)">${ev.company_count || 0}</td>
+            <td style="color:var(--muted)">${ev.expected_attendees ? ev.expected_attendees.toLocaleString() : '—'}</td>
+          </tr>`).join('');
+      }
+      const total = d.total || 0;
+      document.getElementById('ev-page-info').textContent = `${offset + 1}–${Math.min(offset + 50, total)} of ${total}`;
+      document.getElementById('ev-prev').disabled = offset === 0;
+      document.getElementById('ev-next').disabled = offset + 50 >= total;
+    } catch {
+      tbody.innerHTML = '<tr class="loading-row"><td colspan="9" style="color:#ef4444">API server offline. Start with: npm run dashboard</td></tr>';
+    }
+  }
+
+  async function openEventDetail(eventId) {
+    const panel = document.getElementById('event-detail');
+    panel.classList.add('open');
+    document.getElementById('detail-name').textContent = 'Loading…';
+    document.getElementById('detail-meta').innerHTML = '';
+    document.getElementById('detail-companies').innerHTML = '<tr class="loading-row"><td colspan="6">Loading…</td></tr>';
+    panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+
+    try {
+      const d = await apiFetch('/api/events/' + eventId);
+      const ev = d.event;
+      document.getElementById('detail-name').textContent = ev.name;
+      document.getElementById('detail-meta').innerHTML = [
+        `<span class="meta-pill">📅 <strong>${fmtDate(ev.start_date)}</strong></span>`,
+        `<span class="meta-pill">📍 <strong>${ev.location_city}, ${ev.location_country}</strong></span>`,
+        `<span class="meta-pill">🏷 <strong>${ev.event_type || '—'}</strong></span>`,
+        `<span class="meta-pill">👥 <strong>${ev.expected_attendees?.toLocaleString() || '—'}</strong> attendees</span>`,
+        ev.ticket_price_range ? `<span class="meta-pill">🎟 <strong>${ev.ticket_price_range}</strong></span>` : '',
+        ev.organiser ? `<span class="meta-pill">🏢 <strong>${ev.organiser}</strong></span>` : '',
+      ].join('');
+
+      document.getElementById('detail-companies').innerHTML = d.companies.length
+        ? d.companies.map(c => `
+          <tr>
+            <td><strong>${c.name}</strong>${c.description ? `<br><span style="font-size:11px;color:var(--muted)">${c.description.slice(0,80)}…</span>` : ''}</td>
+            <td><span class="badge ${roleBadge(c.role)}">${c.role || '—'}</span></td>
+            <td style="color:var(--muted);font-size:12px">${c.tier || '—'}</td>
+            <td>${c.website ? `<a href="${c.website}" target="_blank" style="color:var(--accent);font-size:12px">↗</a>` : '—'}</td>
+            <td style="color:var(--muted);font-size:12px">${c.employee_count || '—'}</td>
+            <td style="color:var(--muted);font-size:12px">${c.revenue_range || '—'}</td>
+          </tr>`).join('')
+        : '<tr class="loading-row"><td colspan="6">No company data yet for this event.</td></tr>';
+    } catch (e) {
+      document.getElementById('detail-name').textContent = 'Error loading event';
+    }
+  }
+
+  function closeDetail() {
+    document.getElementById('event-detail').classList.remove('open');
+  }
+
+  // ── Companies table ───────────────────────────────────────────────────────
+  async function loadCompanies(offset = 0) {
+    coOffset = offset;
+    const search   = document.getElementById('co-search').value;
+    const country  = document.getElementById('co-country').value;
+    const revenue  = document.getElementById('co-revenue').value;
+    const size     = document.getElementById('co-size').value;
+
+    const q = new URLSearchParams({ limit: 50, offset });
+    if (search)  q.set('search', search);
+    if (country) q.set('country', country);
+    if (revenue) q.set('revenue', revenue);
+    if (size)    q.set('employees', size);
+
+    const tbody = document.getElementById('companies-tbody');
+    tbody.innerHTML = '<tr class="loading-row"><td colspan="8">Loading…</td></tr>';
+
+    try {
+      const d = await apiFetch('/api/companies?' + q);
+      if (!d.companies.length) {
+        tbody.innerHTML = `<tr class="loading-row"><td colspan="8"><div class="empty"><div class="empty-icon">🏢</div><p>No companies yet. Run Agent 2 first.</p></div></td></tr>`;
+      } else {
+        tbody.innerHTML = d.companies.map(c => `
+          <tr>
+            <td><strong>${c.name}</strong>${c.description ? `<br><span style="font-size:11px;color:var(--muted)">${c.description.slice(0,70)}…</span>` : ''}</td>
+            <td style="color:var(--muted);font-size:12px">${c.industry || '—'}</td>
+            <td style="font-size:12px">${c.hq_city ? c.hq_city + ', ' : ''}${c.hq_country || '—'}</td>
+            <td style="color:var(--muted);font-size:12px">${c.employee_count || '—'}</td>
+            <td style="color:var(--muted);font-size:12px">${c.revenue_range || '—'}</td>
+            <td style="font-weight:700;color:var(--accent)">${c.event_count || 0}</td>
+            <td style="font-size:11px;color:var(--muted)">${c.roles || '—'}</td>
+            <td style="white-space:nowrap">
+              ${c.website ? `<a href="${c.website}" target="_blank" style="color:var(--accent);font-size:12px;margin-right:6px">Web</a>` : ''}
+              ${c.linkedin_url ? `<a href="${c.linkedin_url}" target="_blank" style="color:#0a66c2;font-size:12px">LI</a>` : ''}
+            </td>
+          </tr>`).join('');
+      }
+      document.getElementById('co-prev').disabled = offset === 0;
+      document.getElementById('co-next').disabled = d.companies.length < 50;
+      document.getElementById('co-page-info').textContent = `Page ${Math.floor(offset / 50) + 1}`;
+    } catch {
+      tbody.innerHTML = '<tr class="loading-row"><td colspan="8" style="color:#ef4444">API offline</td></tr>';
+    }
+  }
+
+  // ── Config & Logs ─────────────────────────────────────────────────────────
+  async function loadRunLog() {
+    const log = document.getElementById('run-log');
+    try {
+      const r = await fetch(API + '/api/stats');
+      log.textContent = r.ok
+        ? '✅ Connected to TiDB via API server\n\nRun: npm run run-once  — to trigger agents now\nRun: npm start         — to start the daily 07:00 scheduler\n\nCheck terminal for live agent output logs.'
+        : '⚠️  API server not reachable.\nStart with: npm run dashboard';
+    } catch {
+      log.textContent = '❌ API server offline.\n\nTo start:\n  1. cp .env.example .env\n  2. Fill in your TiDB credentials\n  3. npm install\n  4. node db/setup.js\n  5. npm run dashboard   (API server)\n  6. npm start           (scheduler)';
+    }
+  }
+
+  function saveConfig() {
+    API = document.getElementById('cfg-api-url').value.trim().replace(/\/$/, '');
+    localStorage.setItem('event-intel-api', API);
+    document.getElementById('conn-status').textContent = 'Saved. Testing connection…';
+    loadAllData();
+    loadRunLog();
+    setTimeout(() => {
+      document.getElementById('conn-status').textContent = '✅ Config saved';
+    }, 1500);
+  }
+
+  // ── Debounce helpers ──────────────────────────────────────────────────────
+  function debounceLoadEvents()    { clearTimeout(evDebounce); evDebounce = setTimeout(() => loadEvents(0), 350); }
+  function debounceLoadCompanies() { clearTimeout(coDebounce); coDebounce = setTimeout(() => loadCompanies(0), 350); }
+
+  // ── Formatting helpers ────────────────────────────────────────────────────
+  function fmtDate(d) {
+    if (!d) return '—';
+    return new Date(d).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+  }
+  function industryBadge(i) {
+    if (!i) return '';
+    if (i.includes('AI'))      return 'badge-ai';
+    if (i.includes('FinTech')) return 'badge-fintech';
+    return 'badge-tech';
+  }
+  function roleBadge(r) {
+    if (!r) return '';
+    if (r === 'Sponsor')   return 'badge-sponsor';
+    if (r === 'Exhibitor') return 'badge-exhibitor';
+    if (r === 'Speaker')   return 'badge-speaker';
+    return '';
+  }
+
+  // ── Init ──────────────────────────────────────────────────────────────────
+  document.getElementById('cfg-api-url').value = API;
+  loadAllData();
+</script>
+</body>
+</html>

@@ -5,3 +5,5 @@ __pycache__/
 *.log
 logs/
 *.db
+node_modules/
+npm-debug.log*

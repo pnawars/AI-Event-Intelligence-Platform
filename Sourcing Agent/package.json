@@ -1,0 +1,23 @@
+{
+  "name": "event-sourcing-agent",
+  "version": "1.0.0",
+  "description": "AI agent system for sourcing UK & Ireland Tech/FinTech/AI events and company intelligence",
+  "main": "scheduler/index.js",
+  "type": "module",
+  "scripts": {
+    "start": "node scheduler/index.js",
+    "run-once": "node scheduler/runOnce.js",
+    "agent1": "node agents/agent1_eventFinder.js",
+    "agent2": "node agents/agent2_companyResearcher.js",
+    "setup-db": "node db/setup.js",
+    "dashboard": "node dashboard/server.js"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.52.0",
+    "mysql2": "^3.11.0",
+    "node-cron": "^3.0.3",
+    "dotenv": "^16.4.5",
+    "express": "^4.21.0",
+    "cors": "^2.8.5"
+  }
+}
