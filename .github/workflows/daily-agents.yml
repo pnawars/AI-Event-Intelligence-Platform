@@ -1,0 +1,33 @@
+name: Daily Event Intelligence Pipeline
+
+on:
+  schedule:
+    - cron: '0 7 * * *'   # 07:00 UTC daily (08:00 London BST in summer / 07:00 GMT in winter)
+  workflow_dispatch:        # Allow manual trigger from the GitHub Actions tab
+
+jobs:
+  run-agents:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install dependencies
+        run: npm ci
+        working-directory: 'Sourcing Agent'
+
+      - name: Run full pipeline (Agent 1 — events, Agent 2 — companies)
+        working-directory: 'Sourcing Agent'
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          TIDB_HOST: ${{ secrets.TIDB_HOST }}
+          TIDB_PORT: ${{ secrets.TIDB_PORT }}
+          TIDB_USER: ${{ secrets.TIDB_USER }}
+          TIDB_PASSWORD: ${{ secrets.TIDB_PASSWORD }}
+          TIDB_DATABASE: ${{ secrets.TIDB_DATABASE }}
+        run: node scheduler/runOnce.js
